@@ -152,6 +152,7 @@ public sealed partial class LaunchGameViewModel : Abstraction.ViewModel, IViewMo
                 await taskContext.SwitchToMainThreadAsync();
                 await TargetSchemeFilteredGameAccountsView.SetAsync(currentScheme).ConfigureAwait(true);
                 await GamePackageViewModel.ReloadAsync().ConfigureAwait(true);
+                await RefreshCoexistenceStatusAsync().ConfigureAwait(true);
             }
         }
         catch (HutaoException ex)

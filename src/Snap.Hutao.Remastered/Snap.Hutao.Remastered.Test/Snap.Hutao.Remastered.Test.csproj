@@ -13,6 +13,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="../Snap.Hutao.Remastered/Service/Game/Coexistence/GameServerCoexistenceStorage.cs" Link="Production/Coexistence/GameServerCoexistenceStorage.cs" />
+    <Compile Include="../Snap.Hutao.Remastered/Service/Game/Coexistence/GameServerCoexistenceState.cs" Link="Production/Coexistence/GameServerCoexistenceState.cs" />
     <Compile Include="../Snap.Hutao.Remastered/Service/Game/GameLifeCycle.cs" Link="Production/Game/GameLifeCycle.cs" />
     <Compile Include="../Snap.Hutao.Remastered/Service/Game/GameConstants.cs" Link="Production/Game/GameConstants.cs" />
     <Compile Include="../Snap.Hutao.Remastered/Core/Threading/SpinWaitPolyfill.cs" Link="Production/Game/SpinWaitPolyfill.cs" />

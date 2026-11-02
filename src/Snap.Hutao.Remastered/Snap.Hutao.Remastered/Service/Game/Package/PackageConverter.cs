@@ -8,6 +8,7 @@ using Snap.Hutao.Remastered.Core.IO;
 using Snap.Hutao.Remastered.Core.IO.Compression.Zstandard;
 using Snap.Hutao.Remastered.Core.IO.Hashing;
 using Snap.Hutao.Remastered.Factory.IO;
+using Snap.Hutao.Remastered.Service.Game.Coexistence;
 using Snap.Hutao.Remastered.Service.Game.FileSystem;
 using Snap.Hutao.Remastered.Service.Game.Package.Advanced.AssetOperation;
 using Snap.Hutao.Remastered.Service.Game.Package.Advanced.Model;
@@ -37,6 +38,7 @@ public sealed partial class PackageConverter : IPackageConverter
 
     public async ValueTask EnsureDeprecatedFilesAndSDKAsync(PackageConverterDeprecationContext context)
     {
+        await GameServerCoexistenceStorage.DetachAsync(context.GameFileSystem.GameDirectory).ConfigureAwait(false);
         // Just try to delete these files, always download from server when needed
         string gameDirectory = context.GameFileSystem.GameDirectory;
         FileOperation.Delete(Path.Combine(gameDirectory, GameConstants.YuanShenData, "Plugins\\PCGameSDK.dll"));
@@ -67,6 +69,11 @@ public sealed partial class PackageConverter : IPackageConverter
 
     public async ValueTask<bool> EnsureGameResourceAsync(PackageConverterContext context)
     {
+        if (GameServerCoexistenceStorage.ReadState(context.GameFileSystem.GameDirectory) is not null)
+        {
+            throw HutaoException.InvalidOperation(SH.GameCoexistenceConvertBlocked);
+        }
+
         // 基本步骤与 ScatteredPackageConverter 相同
         // 以 国服 -> 国际服 为例
         // 1. 获取两服的清单文件

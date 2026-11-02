@@ -580,6 +580,31 @@
                                                 </cwc:Case>
                                             </cwc:SwitchPresenter>
                                         </cwc:SettingsCard>
+                                        <cwc:SettingsCard
+                                            Description="{shuxm:ResourceString Name=GameCoexistenceCardDescription}"
+                                            Header="{shuxm:ResourceString Name=GameCoexistenceCardHeader}"
+                                            HeaderIcon="{shuxm:FontIcon Glyph=&#xE8AB;}">
+                                            <StackPanel MaxWidth="360" Spacing="8">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <Button
+                                                        IsEnabled="{x:Bind ((shvg:LaunchGameViewModel)DataContext).IsCoexistenceBusy, Converter={StaticResource BoolNegationConverter}, Mode=OneWay}"
+                                                        Command="{x:Bind ((shvg:LaunchGameViewModel)DataContext).PairGameServersCommand, Mode=OneWay}"
+                                                        Content="{shuxm:ResourceString Name=GameCoexistencePairButton}"/>
+                                                    <Button
+                                                        IsEnabled="{x:Bind ((shvg:LaunchGameViewModel)DataContext).IsCoexistenceBusy, Converter={StaticResource BoolNegationConverter}, Mode=OneWay}"
+                                                        Command="{x:Bind ((shvg:LaunchGameViewModel)DataContext).UnpairGameServersCommand, Mode=OneWay}"
+                                                        Content="{shuxm:ResourceString Name=GameCoexistenceUnpairButton}"/>
+                                                </StackPanel>
+                                                <ProgressBar IsIndeterminate="True"
+                                                    Visibility="{x:Bind ((shvg:LaunchGameViewModel)DataContext).IsCoexistenceBusy, Converter={StaticResource BoolToVisibilityConverter}, Mode=OneWay}"/>
+                                                <TextBlock TextWrapping="Wrap" MaxLines="3"
+                                                    Text="{x:Bind ((shvg:LaunchGameViewModel)DataContext).CoexistenceStatus, Mode=OneWay}"/>
+                                                <Button
+                                                    Command="{x:Bind ((shvg:LaunchGameViewModel)DataContext).CancelCoexistenceCommand, Mode=OneWay}"
+                                                    Content="{shuxm:ResourceString Name=ContentDialogCancelCloseButtonText}"
+                                                    Visibility="{x:Bind ((shvg:LaunchGameViewModel)DataContext).IsCoexistenceBusy, Converter={StaticResource BoolToVisibilityConverter}, Mode=OneWay}"/>
+                                            </StackPanel>
+                                        </cwc:SettingsCard>
                                         <!--  悬浮窗  -->
                                         <ScrollViewer>
                                             <cwc:SettingsExpander

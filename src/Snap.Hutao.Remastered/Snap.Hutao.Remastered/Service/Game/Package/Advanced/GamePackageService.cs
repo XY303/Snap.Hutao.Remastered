@@ -7,8 +7,9 @@ using Snap.Hutao.Remastered.Core.IO.Hashing;
 using Snap.Hutao.Remastered.Core.Threading.RateLimiting;
 using Snap.Hutao.Remastered.Factory.IO;
 using Snap.Hutao.Remastered.Factory.Progress;
-using Snap.Hutao.Remastered.Service.Game.FileSystem;
+using Snap.Hutao.Remastered.Service.Game.Coexistence;
 using Snap.Hutao.Remastered.Service.Game.Configuration;
+using Snap.Hutao.Remastered.Service.Game.FileSystem;
 using Snap.Hutao.Remastered.Service.Game.Package.Advanced.Model;
 using Snap.Hutao.Remastered.Service.Game.Package.Advanced.PackageOperation;
 using Snap.Hutao.Remastered.Service.Notification;
@@ -53,6 +54,14 @@ public sealed partial class GamePackageService : IGamePackageService
 
     public async ValueTask<bool> ExecuteOperationAsync(GamePackageOperationContext operationContext)
     {
+        // Install/extract contexts may not own a normal GameFileSystem read lock.
+        // Keep association/unpairing excluded for the entire package operation, not just detach.
+        if (!serviceProvider.GetRequiredService<LaunchOptions>().GamePathLock.TryReaderLock(nameof(GamePackageService), out AsyncReaderWriterLock.Releaser pathAccess))
+        {
+            throw new InvalidOperationException(SH.GameCoexistenceOperationBusy);
+        }
+
+        using AsyncReaderWriterLock.Releaser packagePathAccess = pathAccess;
         if (operationContext.InstallationAtPreparation is { } prepared)
         {
             IGameFileSystemView fs = operationContext.GameFileSystem;
@@ -135,6 +144,25 @@ public sealed partial class GamePackageService : IGamePackageService
                     {
                         try
                         {
+                            GameServerCoexistenceState? coexistence = GameServerCoexistenceStorage.ReadState(operationContext.EffectiveGameDirectory);
+                            if (coexistence is not null && await GameLifeCycle.IsGameRunningAsync(taskContext).ConfigureAwait(false))
+                            {
+                                throw new InvalidOperationException(SH.ServiceGameLaunchExecutionGameIsRunning);
+                            }
+
+                            // Verify can repair, and predownloads may be consumed by external updaters.
+                            // Restore independent resources inside the cancellable/retryable window.
+                            if (coexistence?.SharedFiles.Count > 0)
+                            {
+                                progress.Report(new GamePackageOperationReport.Reset(SH.FormatGameCoexistenceRestoring(string.Empty)));
+                            }
+
+                            await GameServerCoexistenceStorage.DetachAsync(
+                                operationContext.EffectiveGameDirectory,
+                                new CoexistenceProgress(progress),
+                                operationCtsLocal.Token,
+                                () => serviceContext.WaitForExecutionAsync().AsTask()).ConfigureAwait(false);
+                            await serviceContext.WaitForExecutionAsync().ConfigureAwait(false);
                             await operation.ExecuteAsync(serviceContext).ConfigureAwait(false);
                             result = true;
                             break;
@@ -215,6 +243,14 @@ public sealed partial class GamePackageService : IGamePackageService
 
             await window.CloseTask.ConfigureAwait(false);
             return result;
+        }
+    }
+
+    private sealed class CoexistenceProgress(IProgress<GamePackageOperationReport> progress) : IProgress<string>
+    {
+        public void Report(string value)
+        {
+            progress.Report(new GamePackageOperationReport.Install(0, 0, value));
         }
     }
 

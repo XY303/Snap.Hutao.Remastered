@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Controls;
 using Snap.Hutao.Remastered.Core.ExceptionService;
 using Snap.Hutao.Remastered.Core.IO;
 using Snap.Hutao.Remastered.Factory.ContentDialog;
+using Snap.Hutao.Remastered.Service.Game.Coexistence;
 using Snap.Hutao.Remastered.Service.Game.Package.Advanced.Model;
 using Snap.Hutao.Remastered.Web.Hoyolab.Takumi.Downloader.Proto;
 using System.Collections.Immutable;
@@ -51,6 +52,7 @@ public sealed partial class GamePackageServiceOperationInformationTraits
 
         long downloadedTotalBytes = GetSize(context.EffectiveChunksDirectory);
         long actualTotalBytes = installTotalBytes - downloadedTotalBytes + (1024L * 1024L * 1024L); // 1 GB for temp files
+        actualTotalBytes = checked(actualTotalBytes + GameServerCoexistenceStorage.GetRequiredDetachBytes(context.EffectiveGameDirectory));
         long availableBytes = LogicalDrive.GetAvailableFreeSpace(context.EffectiveGameDirectory);
 
         string formattedDownloadTotalBytes = Converters.ToFileSizeString(downloadTotalBytes);

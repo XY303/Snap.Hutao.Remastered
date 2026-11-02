@@ -6215,4 +6215,87 @@
   <data name="ViewPageLaunchGameAutoSelectServerDescription" xml:space="preserve">
     <value>启动时按当前账号类型自动转换，仅匹配官服默认、bilibili 和国际服默认；无可识别账号时使用手动选择。</value>
   </data>
+  <data name="GameCoexistenceCardHeader" xml:space="preserve">
+    <value>多服共存（实验性）</value>
+  </data>
+  <data name="GameCoexistenceCardDescription" xml:space="preserve">
+    <value>关联两份已安装的官服默认与国际服默认客户端，共享内容相同的部分资源。仅支持同一 NTFS 卷，不支持 bilibili。存在兼容性风险，可能引发无法预见的错误。</value>
+  </data>
+  <data name="GameCoexistencePairButton" xml:space="preserve">
+    <value>选择另一安装并关联</value>
+  </data>
+  <data name="GameCoexistenceUnpairButton" xml:space="preserve">
+    <value>恢复独立并解除关联</value>
+  </data>
+  <data name="GameCoexistenceSelectInstallation" xml:space="preserve">
+    <value>选择已安装的另一服务器游戏程序</value>
+  </data>
+  <data name="GameCoexistenceRiskTitle" xml:space="preserve">
+    <value>实验性功能：请先阅读兼容性风险</value>
+  </data>
+  <data name="GameCoexistenceRiskDescription" xml:space="preserve">
+    <value>本功能通过硬链接共享两份客户端内内容完全一致的部分资源。硬链接不是备份，写入任一共享文件都可能同时影响两服。
+
+官方启动器更新、游戏内热更新、反作弊以及第三方工具的兼容性尚未验证，可能引发无法预见的错误，包括资源损坏、校验失败、无法启动或需要重新下载游戏。请先备份重要文件，并关闭游戏、官方启动器及其他修改游戏文件的程序。
+
+程序内更新、校验修复与预下载前会先恢复当前安装的独立资源，可能需要大量额外空间；之后可重新关联以共享资源。外部工具直接更新或修改无法受到此保护。使用官方启动器或第三方工具更新前，请先恢复独立并解除关联。
+
+首版仅关联两份已安装、版本一致的官服默认和国际服默认客户端，仅支持同一 NTFS 卷；不自动下载另一客户端，不支持 bilibili、目录链接、文件符号链接，也不提供同时运行两服的能力。</value>
+  </data>
+  <data name="GameCoexistenceSecondConfirmationTitle" xml:space="preserve">
+    <value>二次确认：我理解并接受上述风险</value>
+  </data>
+  <data name="GameCoexistenceSecondConfirmation" xml:space="preserve">
+    <value>将关联以下两个安装目录：
+
+当前游戏：{0}
+另一游戏：{1}
+
+继续后将修改两边的资源文件链接。此功能可能引发无法预见的错误，且不保证官方启动器、热更新、反作弊和第三方工具兼容。请确认已备份并关闭所有相关程序。
+
+确定接受风险并开始关联吗？</value>
+  </data>
+  <data name="GameCoexistenceUnpairTitle" xml:space="preserve">
+    <value>恢复独立文件并解除关联</value>
+  </data>
+  <data name="GameCoexistenceUnpairDescription" xml:space="preserve">
+    <value>将把两份安装中仍共享的资源恢复为独立文件，并解除自动切换关联。此操作可能需要大量额外磁盘空间；空间不足或操作中断时会保留恢复记录，请再次执行本操作。请先关闭游戏、官方启动器和第三方工具。是否继续？</value>
+  </data>
+  <data name="GameCoexistenceInstallationInvalid" xml:space="preserve">
+    <value>需要两份版本一致、版本文件正常的官服默认和国际服默认完整客户端。请先分别校验修复，不支持 bilibili 或其他渠道配置。</value>
+  </data>
+  <data name="GameCoexistenceOperationBusy" xml:space="preserve">
+    <value>游戏路径正在被启动或资源操作使用，请结束相关操作后重试。</value>
+  </data>
+  <data name="GameCoexistenceConvertBlocked" xml:space="preserve">
+    <value>此安装已关联多服共存，仅支持官服默认和国际服默认。请通过“启动游戏”切换到对应目录；如需原地转换或使用 bilibili，请先“恢复独立并解除关联”。</value>
+  </data>
+  <data name="GameCoexistenceProcessing" xml:space="preserve">
+    <value>正在处理资源：{0}</value>
+  </data>
+  <data name="GameCoexistencePreparing" xml:space="preserve">
+    <value>正在校验资源并准备共享，请勿启动游戏或更新客户端……</value>
+  </data>
+  <data name="GameCoexistenceCompleted" xml:space="preserve">
+    <value>已关联两份安装，共享 {0} 个资源文件，约节省 {1} GiB。可通过选择服务器并启动，或启用自动选服切换目录。</value>
+  </data>
+  <data name="GameCoexistenceUnpaired" xml:space="preserve">
+    <value>已恢复独立资源并解除关联。</value>
+  </data>
+  <data name="GameCoexistenceInterrupted" xml:space="preserve">
+    <value>操作已取消，已完成的文件操作保留。若已生成关联记录，请执行“恢复独立并解除关联”，或重新关联。</value>
+  </data>
+  <data name="GameCoexistenceFailed" xml:space="preserve">
+    <value>多服共存操作失败。已完成的步骤可能保留，请查看错误详情；可重试“恢复独立并解除关联”。</value>
+  </data>
+  <data name="GameCoexistenceRestoring" xml:space="preserve">
+    <value>正在恢复独立资源：{0}</value>
+  </data>
+  <data name="GameCoexistenceNotAssociated" xml:space="preserve">
+    <value>当前安装尚未关联多服共存。</value>
+  </data>
+  <data name="GameCoexistenceAssociated" xml:space="preserve">
+    <value>已关联官服：{0}
+国际服：{1}。更新修复后可重新关联以恢复资源共享。</value>
+  </data>
 </root>

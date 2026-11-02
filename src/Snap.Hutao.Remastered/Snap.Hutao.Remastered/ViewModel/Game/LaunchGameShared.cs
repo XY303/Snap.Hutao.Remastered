@@ -8,9 +8,11 @@ using Snap.Hutao.Remastered.Core.Logging;
 using Snap.Hutao.Remastered.Factory.ContentDialog;
 using Snap.Hutao.Remastered.Factory.Process;
 using Snap.Hutao.Remastered.Model.Entity.Primitive;
+using Snap.Hutao.Remastered.Model.Intrinsic;
 using Snap.Hutao.Remastered.Service.Game;
 using Snap.Hutao.Remastered.Service.Game.AdvancedStart;
 using Snap.Hutao.Remastered.Service.Game.AdvancedStart.Model;
+using Snap.Hutao.Remastered.Service.Game.Coexistence;
 using Snap.Hutao.Remastered.Service.Game.Configuration;
 using Snap.Hutao.Remastered.Service.Game.FileSystem;
 using Snap.Hutao.Remastered.Service.Game.Launching;
@@ -105,6 +107,7 @@ public sealed partial class LaunchGameShared
             DefaultLaunchExecutionInvoker invoker = new();
             try
             {
+                LaunchScheme? launchScheme = viewModel.TargetScheme;
                 if (launchOptions.AutoSelectServer.Value)
                 {
                     SchemeType? accountType = userAndUid?.Uid.Region.Value switch
@@ -122,8 +125,35 @@ public sealed partial class LaunchGameShared
 
                     if (KnownLaunchSchemes.GetDefaultForAccountType(accountType) is { } scheme)
                     {
-                        await viewModel.SetTargetSchemeAsync(scheme).ConfigureAwait(false);
+                        launchScheme = scheme;
                     }
+                }
+
+                if (launchScheme is not null)
+                {
+                    string? executable = launchOptions.GamePathEntry.Value?.Path;
+                    if (executable is not null && GameServerCoexistenceStorage.ReadState(GameServerCoexistenceStorage.GetRoot(executable)) is not null)
+                    {
+                        if (launchScheme.Channel is not ChannelType.Official || launchScheme.SubChannel is not SubChannelType.Default)
+                        {
+                            throw HutaoException.InvalidOperation(SH.GameCoexistenceConvertBlocked);
+                        }
+
+                        string target = GameServerCoexistenceStorage.GetCounterpart(executable, launchScheme.IsOversea)!;
+                        GameServerCoexistenceService.InspectInstallation(target);
+                        if (!target.Equals(executable, StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (await GameLifeCycle.IsGameRunningAsync(taskContext).ConfigureAwait(false))
+                            {
+                                throw HutaoException.InvalidOperation(SH.ServiceGameLaunchExecutionGameIsRunning);
+                            }
+
+                            await taskContext.SwitchToMainThreadAsync();
+                            launchOptions.PerformGamePathEntrySynchronization(target);
+                        }
+                    }
+
+                    await viewModel.SetTargetSchemeAsync(launchScheme).ConfigureAwait(false);
                 }
 
                 LaunchExecutionInvocationContext context = new()

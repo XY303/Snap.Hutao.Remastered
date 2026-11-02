@@ -3,6 +3,8 @@
 
 using Snap.Hutao.Remastered.Core.ExceptionService;
 using Snap.Hutao.Remastered.Core.IO.Ini;
+using Snap.Hutao.Remastered.Model.Intrinsic;
+using Snap.Hutao.Remastered.Service.Game.Coexistence;
 using Snap.Hutao.Remastered.Service.Game.Configuration;
 using Snap.Hutao.Remastered.Service.Game.FileSystem;
 using Snap.Hutao.Remastered.Service.Game.Launching.Context;
@@ -15,6 +17,14 @@ public sealed class LaunchExecutionChannelOptionsHandler : AbstractLaunchExecuti
 {
     public override ValueTask BeforeAsync(BeforeLaunchExecutionContext context)
     {
+        if (GameServerCoexistenceStorage.ReadState(context.FileSystem.GameDirectory) is not null
+            && (context.TargetScheme.IsOversea != context.FileSystem.IsExecutableOversea
+                || context.TargetScheme.Channel is not ChannelType.Official
+                || context.TargetScheme.SubChannel is not SubChannelType.Default))
+        {
+            throw HutaoException.InvalidOperation(SH.GameCoexistenceConvertBlocked);
+        }
+
         string configPath = context.FileSystem.GameConfigurationFilePath;
 
         IniElement[]? elements;
