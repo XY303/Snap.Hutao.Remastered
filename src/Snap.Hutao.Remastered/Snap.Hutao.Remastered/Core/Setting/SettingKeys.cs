@@ -113,6 +113,8 @@ public static class SettingKeys
 
     // Game
     public const string LaunchAspectRatios                               = "Snap::Hutao::Game::CommandLine::AspectRatios";
+    public const string LaunchAutoSelectServer                          = "Snap::Hutao::Game::AutoSelectServer";
+
     public const string LaunchUsingHoyolabAccount                        = "Snap::Hutao::Game::CommandLine::AuthTicket";
     public const string LaunchIsBorderless                               = "Snap::Hutao::Game::CommandLine::Borderless";
     public const string LaunchAreCommandLineArgumentsEnabled             = "Snap::Hutao::Game::CommandLine::Enabled";

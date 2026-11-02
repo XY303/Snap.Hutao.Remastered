@@ -7,6 +7,7 @@ using Snap.Hutao.Remastered.Core.ExceptionService;
 using Snap.Hutao.Remastered.Core.Logging;
 using Snap.Hutao.Remastered.Factory.ContentDialog;
 using Snap.Hutao.Remastered.Factory.Process;
+using Snap.Hutao.Remastered.Model.Entity.Primitive;
 using Snap.Hutao.Remastered.Service.Game;
 using Snap.Hutao.Remastered.Service.Game.AdvancedStart;
 using Snap.Hutao.Remastered.Service.Game.AdvancedStart.Model;
@@ -104,6 +105,27 @@ public sealed partial class LaunchGameShared
             DefaultLaunchExecutionInvoker invoker = new();
             try
             {
+                if (launchOptions.AutoSelectServer.Value)
+                {
+                    SchemeType? accountType = userAndUid?.Uid.Region.Value switch
+                    {
+                        "cn_gf01" => SchemeType.ChineseOfficial,
+                        "cn_qd01" => SchemeType.ChineseBilibili,
+                        "os_usa" or "os_euro" or "os_asia" or "os_cht" => SchemeType.Oversea,
+                        _ => null,
+                    };
+
+                    if (!launchOptions.UsingHoyolabAccount.Value)
+                    {
+                        accountType = viewModel.GameAccount?.Type ?? accountType;
+                    }
+
+                    if (KnownLaunchSchemes.GetDefaultForAccountType(accountType) is { } scheme)
+                    {
+                        await viewModel.SetTargetSchemeAsync(scheme).ConfigureAwait(false);
+                    }
+                }
+
                 LaunchExecutionInvocationContext context = new()
                 {
                     ViewModel = viewModel,

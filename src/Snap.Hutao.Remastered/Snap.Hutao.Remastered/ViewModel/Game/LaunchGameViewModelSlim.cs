@@ -16,7 +16,6 @@ using Snap.Hutao.Remastered.UI.Xaml.View.Dialog;
 using Snap.Hutao.Remastered.UI.Xaml.View.Page;
 using Snap.Hutao.Remastered.ViewModel.User;
 using Snap.Hutao.Remastered.Web.Hoyolab.Takumi.Binding;
-using System.Diagnostics;
 
 namespace Snap.Hutao.Remastered.ViewModel.Game;
 
@@ -48,14 +47,17 @@ public sealed partial class LaunchGameViewModelSlim : Abstraction.ViewModelSlim<
 
     LaunchScheme? IViewModelSupportLaunchExecution.TargetScheme { get => CurrentSchemeFilteredGameAccountsView.Scheme; }
 
-    LaunchScheme? IViewModelSupportLaunchExecution.CurrentScheme { get => CurrentSchemeFilteredGameAccountsView.Scheme; }
+    LaunchScheme? IViewModelSupportLaunchExecution.CurrentScheme { get => Shared.GetCurrentLaunchSchemeFromConfigurationFile(); }
 
     GameAccount? IViewModelSupportLaunchExecution.GameAccount { get => CurrentSchemeFilteredGameAccountsView.View?.CurrentItem; }
 
+    ValueTask IViewModelSupportLaunchExecution.SetTargetSchemeAsync(LaunchScheme scheme)
+    {
+        return CurrentSchemeFilteredGameAccountsView.SetAsync(scheme, preserveSelectedAccount: true);
+    }
+
     ValueTask<BlockDeferral<PackageConvertStatus>> IViewModelSupportLaunchExecution.CreateConvertBlockDeferralAsync()
     {
-        // Should never happen: slim does not support package conversion.
-        Debugger.Break();
         return BlockDeferral<PackageConvertStatus>.CreateAsync<LaunchGamePackageConvertDialog>(serviceProvider, static (state, dialog) => dialog.State = state);
     }
 

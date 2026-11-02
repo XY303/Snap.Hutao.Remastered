@@ -41,6 +41,9 @@ public sealed partial class LaunchOptions : DbStoreOptions, IRestrictedGamePathA
     public IObservableProperty<ImmutableArray<GamePathEntry>> GamePathEntries { get => field ??= CreatePropertyForStructUsingJson(SettingKeys.LaunchGamePathEntries, ImmutableArray<GamePathEntry>.Empty); }
 
     [field: MaybeNull]
+    public IObservableProperty<bool> AutoSelectServer { get => field ??= CreateProperty(SettingKeys.LaunchAutoSelectServer, false); }
+
+    [field: MaybeNull]
     public IObservableProperty<bool> UsingHoyolabAccount { get => field ??= CreateProperty(SettingKeys.LaunchUsingHoyolabAccount, false); }
 
     [field: MaybeNull]

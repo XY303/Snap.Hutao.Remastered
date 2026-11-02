@@ -160,6 +160,11 @@ public sealed partial class LaunchGameViewModel : Abstraction.ViewModel, IViewMo
         }
     }
 
+    ValueTask IViewModelSupportLaunchExecution.SetTargetSchemeAsync(LaunchScheme scheme)
+    {
+        return TargetSchemeFilteredGameAccountsView.SetAsync(scheme, preserveSelectedAccount: true);
+    }
+
     ValueTask<BlockDeferral<PackageConvertStatus>> IViewModelSupportLaunchExecution.CreateConvertBlockDeferralAsync()
     {
         return BlockDeferral<PackageConvertStatus>.CreateAsync<LaunchGamePackageConvertDialog>(serviceProvider, static (state, dialog) => dialog.State = state);

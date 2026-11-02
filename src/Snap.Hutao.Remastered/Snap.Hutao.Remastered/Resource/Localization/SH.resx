@@ -6209,4 +6209,10 @@
   <data name="ServiceUpdateOpenStoreFailed" xml:space="preserve">
     <value>无法打开 Microsoft Store 或产品网页。请在 Microsoft Store 中搜索 Snap Hutao Remastered 并检查更新。</value>
   </data>
+  <data name="ViewPageLaunchGameAutoSelectServerHeader" xml:space="preserve">
+    <value>根据账号自动选择服务器</value>
+  </data>
+  <data name="ViewPageLaunchGameAutoSelectServerDescription" xml:space="preserve">
+    <value>启动时按当前账号类型自动转换，仅匹配官服默认、bilibili 和国际服默认；无可识别账号时使用手动选择。</value>
+  </data>
 </root>

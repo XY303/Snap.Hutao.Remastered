@@ -1,6 +1,7 @@
 // Copyright (c) DGP Studio. All rights reserved.
 // Licensed under the MIT license.
 
+using Snap.Hutao.Remastered.Model.Entity.Primitive;
 using Snap.Hutao.Remastered.Model.Intrinsic;
 using System.Collections.Immutable;
 
@@ -70,6 +71,17 @@ public static class KnownLaunchSchemes
         ServerChineseChannel01SubChannel01,
         ServerOverseaChannel01SubChannel00,
     ];
+
+    public static LaunchScheme? GetDefaultForAccountType(SchemeType? accountType)
+    {
+        return accountType switch
+        {
+            SchemeType.ChineseOfficial => ServerChineseChannel01SubChannel00,
+            SchemeType.ChineseBilibili => ServerChineseChannel14SubChannel00,
+            SchemeType.Oversea => ServerOverseaChannel01SubChannel00,
+            _ => null,
+        };
+    }
 
     public static IEnumerable<LaunchScheme> EnumerateNotCompatOnly(bool isOversea)
     {
