@@ -14,6 +14,68 @@ public sealed record GameVersionEntry(Guid Id, bool IsOversea, int Channel, int 
 
 public sealed record GameVersionLibrary(string OriginalExecutable, List<GameVersionEntry> Entries)
 {
+    public IEnumerable<GameVersionEntry> GetReadyEntries(GameVirtualDiskInfo disk, string? selectedExecutable)
+        => Entries.AsEnumerable().Reverse().Where(e => !e.Pending)
+            .OrderByDescending(e => e.GetExecutable(disk).Equals(selectedExecutable, StringComparison.OrdinalIgnoreCase));
+
+    // Collapse accidental copies while keeping different channels and game versions selectable.
+    // Keep all catalog records and files so users can explicitly delete unwanted copies.
+    public IReadOnlyList<GameVersionEntry> GetSelectableEntries(GameVirtualDiskInfo disk, string? selectedExecutable)
+        => GetReadyEntries(disk, selectedExecutable).DistinctBy(e => (e.IsOversea, e.Channel, e.SubChannel, e.Version)).ToList();
+
+    public void DeleteVersion(GameVirtualDiskInfo disk, Guid id, IProgress<string>? progress, CancellationToken token)
+    {
+        GameVersionEntry entry = Entries.Single(e => e.Id == id);
+        GameCoexistenceVirtualDisk.AssertMounted(entry.GetExecutable(disk));
+        string root = Path.GetDirectoryName(entry.GetExecutable(disk))!;
+        string versions = Path.GetDirectoryName(root)!;
+        GameServerCoexistenceStorage.EnsureOrdinaryPath(versions);
+        if (Directory.Exists(versions) && (File.GetAttributes(versions) & FileAttributes.ReparsePoint) != 0) { throw new InvalidDataException("版本目录不能是链接或额外挂载点。"); }
+        List<string> files = [];
+        List<string> directories = [];
+        Visit(root); // Validate the entire tree before making any changes.
+        token.ThrowIfCancellationRequested();
+        int index = Entries.IndexOf(entry);
+        Entries[index] = entry with { Pending = true };
+        Save(disk); // Interrupted deletion must not leave a launchable partial installation.
+        foreach (string file in files)
+        {
+            token.ThrowIfCancellationRequested();
+            GameServerCoexistenceStorage.EnsureOrdinaryPath(file);
+            progress?.Report(file);
+            if (File.Exists(file))
+            {
+                File.SetAttributes(file, File.GetAttributes(file) & ~FileAttributes.ReadOnly);
+                File.Delete(file);
+            }
+        }
+
+        foreach (string directory in directories.AsEnumerable().Reverse())
+        {
+            token.ThrowIfCancellationRequested();
+            GameServerCoexistenceStorage.EnsureOrdinaryPath(directory);
+            Directory.Delete(directory); // Never recursively follow a replacement directory/link.
+        }
+
+        Entries.RemoveAt(index);
+        Save(disk);
+
+        void Visit(string directory)
+        {
+            token.ThrowIfCancellationRequested();
+            GameServerCoexistenceStorage.EnsureOrdinaryPath(directory);
+            if (!Directory.Exists(directory)) { return; }
+            if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0) { throw new InvalidDataException("不能删除包含链接或额外挂载点的版本。"); }
+            directories.Add(directory);
+            foreach (string path in Directory.EnumerateFileSystemEntries(directory))
+            {
+                GameServerCoexistenceStorage.EnsureOrdinaryPath(path);
+                if (Directory.Exists(path)) { Visit(path); }
+                else { files.Add(path); }
+            }
+        }
+    }
+
     public static GameVersionLibrary Read(GameVirtualDiskInfo disk)
     {
         string path = Path.Combine(disk.Container, "installations.json");

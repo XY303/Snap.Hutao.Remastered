@@ -214,6 +214,23 @@ public sealed class GameVirtualDiskTest
         Assert.Throws<InvalidDataException>(() => GameVersionLibrary.Read(disk));
         library.Entries.RemoveAt(library.Entries.Count - 1);
         library.Save(disk);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Task.Run(() => library.DeleteVersion(disk, Guid.NewGuid(), null, CancellationToken.None)));
+        Assert.Throws<OperationCanceledException>(() => library.DeleteVersion(disk, entries[2].Id, null, canceled.Token));
+        Assert.IsFalse(GameVersionLibrary.Read(disk).Entries.Single(e => e.Id == entries[2].Id).Pending);
+        string link = Path.Combine(Path.GetDirectoryName(third)!, "outside-link");
+        Directory.CreateSymbolicLink(link, Path.GetDirectoryName(original)!);
+        try
+        {
+            Assert.Throws<InvalidDataException>(() => library.DeleteVersion(disk, entries[2].Id, null, CancellationToken.None));
+            Assert.IsTrue(File.Exists(original));
+            Assert.IsFalse(GameVersionLibrary.Read(disk).Entries.Single(e => e.Id == entries[2].Id).Pending);
+        }
+        finally { Directory.Delete(link); }
+        library.DeleteVersion(disk, entries[2].Id, null, CancellationToken.None);
+        Assert.IsFalse(Directory.Exists(Path.GetDirectoryName(third)));
+        Assert.AreEqual(2, GameVersionLibrary.Read(disk).Entries.Count);
+        CollectionAssert.AreEqual(content, File.ReadAllBytes(firstFile));
+        CollectionAssert.AreEqual(content, File.ReadAllBytes(secondFile));
     }
 
     [TestMethod]
@@ -245,6 +262,32 @@ public sealed class GameVirtualDiskTest
             Assert.Throws<InvalidDataException>(() => GameVersionLibrary.Read(disk));
         }
         finally { Directory.Delete(container, true); }
+    }
+
+    [TestMethod]
+    public void ServerSwitchReusesExistingEntriesAndCollapsesDuplicateOptions()
+    {
+        GameVirtualDiskInfo disk = new(Path.Combine(Path.GetTempPath(), "selection.hutao-vdisk"), string.Empty);
+        GameVersionEntry chinese = new(Guid.NewGuid(), false, 1, 0, "1.0.0", false);
+        GameVersionEntry duplicate = chinese with { Id = Guid.NewGuid() };
+        GameVersionEntry oversea = chinese with { Id = Guid.NewGuid(), IsOversea = true };
+        GameVersionEntry bili = chinese with { Id = Guid.NewGuid(), Channel = 14 };
+        GameVersionEntry subChannel = chinese with { Id = Guid.NewGuid(), SubChannel = 1 };
+        GameVersionEntry older = chinese with { Id = Guid.NewGuid(), Version = "0.9.0" };
+        GameVersionLibrary library = new("YuanShen.exe", [older, chinese, duplicate, oversea, bili, subChannel, oversea with { Id = Guid.NewGuid(), Pending = true }]);
+        Assert.AreEqual(5, library.GetSelectableEntries(disk, chinese.GetExecutable(disk)).Count);
+        Assert.AreEqual(chinese, library.GetSelectableEntries(disk, chinese.GetExecutable(disk)).First());
+        Assert.IsFalse(library.GetSelectableEntries(disk, null).Any(e => e.Id == chinese.Id));
+        Assert.IsTrue(library.GetSelectableEntries(disk, null).Any(e => e.Id == duplicate.Id));
+        string selected = oversea.GetExecutable(disk);
+        for (int index = 0; index < 2; index++)
+        {
+            GameVersionEntry target = library.GetReadyEntries(disk, selected).First(e => !e.IsOversea && e.Channel == 1 && e.SubChannel == 0);
+            Assert.AreEqual(duplicate.Id, target.Id);
+            selected = oversea.GetExecutable(disk);
+        }
+
+        Assert.AreEqual(7, library.Entries.Count);
     }
 
     private static string Quote(string value) => "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'";

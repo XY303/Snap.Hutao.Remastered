@@ -38,7 +38,7 @@ public sealed partial class GameServerCoexistenceService
         }
     }
 
-    public async Task<string> SelectOrConvertAsync(string executable, LaunchScheme target, bool alwaysCreate, IProgress<string> progress, CancellationToken token)
+    public async Task<string> SelectOrConvertAsync(string executable, LaunchScheme target, IProgress<string> progress, CancellationToken token)
     {
         await taskContext.SwitchToBackgroundAsync();
         using (AcquireExclusiveAccess())
@@ -49,13 +49,10 @@ public sealed partial class GameServerCoexistenceService
                 ?? throw new IOException("虚拟磁盘描述文件丢失。");
             await GameCoexistenceVirtualDisk.EnsureMountedAsync(disk, token).ConfigureAwait(false);
             GameVersionLibrary library = GameVersionLibrary.Read(disk);
-            if (!alwaysCreate)
+            foreach (GameVersionEntry candidate in library.GetReadyEntries(disk, executable).Where(e => Matches(e, target)))
             {
-                foreach (GameVersionEntry candidate in library.Entries.AsEnumerable().Reverse().Where(e => !e.Pending && Matches(e, target)).OrderByDescending(e => e.GetExecutable(disk).Equals(executable, StringComparison.OrdinalIgnoreCase)))
-                {
-                    string path = candidate.GetExecutable(disk);
-                    if (File.Exists(path) && target.Equals(InspectInstallation(path).Channel)) { return path; }
-                }
+                string path = candidate.GetExecutable(disk);
+                if (File.Exists(path) && target.Equals(InspectInstallation(path).Channel)) { return path; }
             }
 
             // Only a catalogued complete installation on this same disk can be a snapshot source.
@@ -117,6 +114,30 @@ public sealed partial class GameServerCoexistenceService
             library.Entries[^1] = entry with { Pending = false };
             library.Save(disk);
             return destination;
+        }
+    }
+
+    public async Task DeleteVersionAsync(Guid id, IProgress<string> progress, CancellationToken token)
+    {
+        await taskContext.SwitchToBackgroundAsync();
+        using (AcquireExclusiveAccess())
+        {
+            await EnsureGameStoppedAsync().ConfigureAwait(false);
+            GameVirtualDiskInfo disk = GameCoexistenceVirtualDisk.ReadDescriptor(launchOptions.CoexistenceContainer.Value) ?? throw new IOException("找不到虚拟磁盘。");
+            await GameCoexistenceVirtualDisk.EnsureMountedAsync(disk, token).ConfigureAwait(false);
+            GameVersionLibrary library = GameVersionLibrary.Read(disk);
+            GameVersionEntry entry = library.Entries.Single(e => e.Id == id);
+            if (entry.GetExecutable(disk).Equals(launchOptions.GamePathEntry.Value?.Path, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new IOException("不能删除当前选中的安装，请先选择其他版本或关闭共存，再删除此版本。");
+            }
+
+            if (launchOptions.CoexistenceEnabled.Value && !entry.Pending && library.Entries.Count(e => !e.Pending) == 1)
+            {
+                throw new IOException("请先关闭共存，再删除最后一个完整版本。");
+            }
+
+            library.DeleteVersion(disk, id, progress, token);
         }
     }
 

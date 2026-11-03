@@ -6219,7 +6219,7 @@
     <value>虚拟磁盘双服共存（实验性）</value>
   </data>
   <data name="GameCoexistenceCardDescription" xml:space="preserve">
-    <value>选择位置创建 ReFS 虚拟磁盘。开启后每次转换会新增独立版本，支持启动页面可选的各区服和渠道；关闭后恢复原安装的转换流程。可手动扫描占用和执行块克隆优化。</value>
+    <value>选择位置创建 ReFS 虚拟磁盘。开启后切换优先复用已有区服，仅缺少时新增独立版本，支持启动页面可选的各区服和渠道；关闭后恢复原安装的转换流程。可手动扫描占用和执行块克隆优化。</value>
   </data>
   <data name="GameCoexistenceCreateButton" xml:space="preserve">
     <value>创建虚拟磁盘双服</value>
@@ -6231,7 +6231,7 @@
     <value>实验性功能：请先阅读兼容性风险</value>
   </data>
   <data name="GameCoexistenceRiskDescription" xml:space="preserve">
-    <value>此实验功能把完整游戏导入您选择位置的新建 ReFS VHDX。开启后每次转换先复制为独立安装，再使用原有官方转换清单和渠道 SDK 处理差异，支持启动页面可选择的区服和渠道（含 bilibili）。此前版本保留，不支持同时运行多个游戏进程。
+    <value>此实验功能把完整游戏导入您选择位置的新建 ReFS VHDX。开启后优先复用已有区服，仅在缺少时复制为独立安装，再使用原有官方转换清单和渠道 SDK 处理差异，支持启动页面可选择的区服和渠道（含 bilibili）。此前版本保留，不支持同时运行多个游戏进程。
 
 大文件在同一 ReFS 卷中直接使用块克隆，共享底层数据，写入自动分离；小文件独立复制。不使用硬链接。手动空间优化仅对内容完全相同的大文件重新共享数据块，释放虚拟盘内部空间，不会自动缩小宿主 VHDX。
 
@@ -6320,9 +6320,15 @@ ReFS、虚拟磁盘、反作弊及游戏更新器之间存在兼容性风险，�
     <value>空间优化（块克隆）</value>
   </data>
   <data name="GameCoexistenceInlineWarning" xml:space="preserve">
-    <value>每次转换保留独立版本；需要 Windows 支持 ReFS 和管理员权限。可能与反作弊、更新器不兼容并产生无法预见的错误，请仅通过胡桃启动和管理。</value>
+    <value>切换优先复用已有区服；各区服独立安装。需要 Windows 支持 ReFS 和管理员权限。可能与反作弊、更新器不兼容并产生无法预见的错误，请仅通过胡桃启动和管理。</value>
   </data>
   <data name="GameCoexistenceScanHint" xml:space="preserve">
     <value>扫描需读取大文件，可能耗时较长；优化仅共享完全相同的数据块，写入相互隔离，不会自动压缩宿主 VHDX。</value>
+  </data>
+  <data name="GameCoexistenceDeleteVersionHeader" xml:space="preserve">
+    <value>删除版本（含重复和未完成的版本）</value>
+  </data>
+  <data name="GameCoexistenceDeleteVersionButton" xml:space="preserve">
+    <value>删除选中的版本…</value>
   </data>
 </root>

@@ -19,9 +19,11 @@ public sealed partial class LaunchGameViewModel
     public string CoexistenceStatus { get; private set => SetProperty(ref field, value); } = string.Empty;
     public string CoexistenceSpace { get; private set => SetProperty(ref field, value); } = "占用：未读取；估算优化比率：待扫描";
     public IReadOnlyList<GameVersionEntry> CoexistenceVersions { get; private set => SetProperty(ref field, value); } = [];
+    public IReadOnlyList<GameVersionEntry> CoexistenceDeletableVersions { get; private set => SetProperty(ref field, value); } = [];
+    public GameVersionEntry? SelectedCoexistenceDeletionVersion { get; set => SetProperty(ref field, value); }
     public GameVersionEntry? SelectedCoexistenceVersion { get; set => SetProperty(ref field, value); }
 
-    internal async ValueTask RefreshCoexistenceStatusAsync()
+    internal async ValueTask RefreshCoexistenceStatusAsync(bool refreshSpace = true)
     {
         if (IsCoexistenceBusy) { return; }
         try
@@ -38,10 +40,12 @@ public sealed partial class LaunchGameViewModel
             GameVersionLibrary library = GameVersionLibrary.Read(disk);
             string usage = $"VHDX 宿主占用：{GameRefsBlockClone.GetFileAllocatedBytes(disk.ImagePath) / (1024D * 1024 * 1024):F2} GiB；估算优化比率：待扫描";
             await taskContext.SwitchToMainThreadAsync();
-            CoexistenceVersions = library.Entries.Where(e => !e.Pending).ToList();
+            CoexistenceVersions = library.GetSelectableEntries(disk, LaunchOptions.GamePathEntry.Value?.Path);
+            CoexistenceDeletableVersions = library.Entries.ToList();
+            SelectedCoexistenceDeletionVersion = null;
             SelectedCoexistenceVersion = CoexistenceVersions.FirstOrDefault(e => e.GetExecutable(disk).Equals(LaunchOptions.GamePathEntry.Value?.Path, StringComparison.OrdinalIgnoreCase));
             CoexistenceStatus = $"{(LaunchOptions.CoexistenceEnabled.Value ? "已开启" : "已关闭（保留虚拟盘）")}：{disk.ImagePath}；共 {library.Entries.Count} 个版本";
-            CoexistenceSpace = usage;
+            if (refreshSpace) { CoexistenceSpace = usage; }
         }
         catch (Exception ex)
         {
@@ -73,7 +77,7 @@ public sealed partial class LaunchGameViewModel
             bool reuse = !string.IsNullOrEmpty(saved) && Path.GetFullPath(folder!).Equals(Path.GetDirectoryName(saved), StringComparison.OrdinalIgnoreCase) && File.Exists(Path.Combine(saved, "installations.json"));
             string container = reuse ? saved : Path.Combine(folder!, "HutaoGame-" + Guid.NewGuid().ToString("N")[..8] + ".hutao-vdisk");
             if (await dialogs.CreateForConfirmCancelAsync(SH.GameCoexistenceSecondConfirmationTitle,
-                $"源安装：{executable}\n虚拟磁盘：{container}\n{(reuse ? "将复用已有版本库" : "将完整导入当前安装")}；以后每次转换增加独立版本。需要管理员权限及足够宿主空间。ReFS、更新器与反作弊兼容性未经保证，可能产生无法预见的错误。确认继续？").ConfigureAwait(false) != ContentDialogResult.Primary) { return; }
+                $"源安装：{executable}\n虚拟磁盘：{container}\n{(reuse ? "将复用已有版本库" : "将完整导入当前安装")}；以后切换优先复用已有区服，仅缺少时创建独立版本。需要管理员权限及足够宿主空间。ReFS、更新器与反作弊兼容性未经保证，可能产生无法预见的错误。确认继续？").ConfigureAwait(false) != ContentDialogResult.Primary) { return; }
             string selected = reuse
                 ? await service.ReopenLibraryAsync(container, token).ConfigureAwait(false)
                 : await service.EnableLibraryAsync(executable, container, progress, token).ConfigureAwait(false);
@@ -111,6 +115,19 @@ public sealed partial class LaunchGameViewModel
         LaunchOptions.PerformGamePathEntrySynchronization(selected);
     });
 
+    [Command("DeleteCoexistenceVersionCommand")]
+    private Task DeleteCoexistenceVersionAsync() => RunLibraryOperationAsync(async (progress, token) =>
+    {
+        if (SelectedCoexistenceDeletionVersion is not { } entry) { return; }
+        GameVirtualDiskInfo disk = GameCoexistenceVirtualDisk.ReadDescriptor(LaunchOptions.CoexistenceContainer.Value) ?? throw new IOException("找不到虚拟磁盘。");
+        string path = Path.GetDirectoryName(entry.GetExecutable(disk))!;
+        IContentDialogFactory dialogs = serviceProvider.GetRequiredService<IContentDialogFactory>();
+        if (await dialogs.CreateForConfirmCancelAsync("删除虚拟盘版本", $"版本：{entry.DisplayName}\n目录：{path}\n将永久删除此版本及其截图、配置等全部文件。其他版本保留；宿主 VHDX 不会自动缩小。确认删除？").ConfigureAwait(false) != ContentDialogResult.Primary) { return; }
+        await serviceProvider.GetRequiredService<GameServerCoexistenceService>().DeleteVersionAsync(entry.Id, progress, token).ConfigureAwait(false);
+        await taskContext.SwitchToMainThreadAsync();
+        CoexistenceSpace = "版本已删除；占用和优化比率请重新扫描。";
+    });
+
     [Command("CancelCoexistenceCommand")]
     private void CancelCoexistence()
     {
@@ -139,6 +156,7 @@ public sealed partial class LaunchGameViewModel
             await taskContext.SwitchToMainThreadAsync();
             coexistenceCancellation = null;
             IsCoexistenceBusy = false;
+            await RefreshCoexistenceStatusAsync(refreshSpace: false);
         }
     }
 }

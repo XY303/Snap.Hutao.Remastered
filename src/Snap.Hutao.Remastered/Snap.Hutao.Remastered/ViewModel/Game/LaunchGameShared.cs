@@ -140,7 +140,7 @@ public sealed partial class LaunchGameShared
                     {
                         using BlockDeferral<Snap.Hutao.Remastered.Service.Game.Package.PackageConvertStatus> deferral = await viewModel.CreateConvertBlockDeferralAsync().ConfigureAwait(false);
                         IProgress<string> progress = new Progress<string>(value => deferral.Progress.Report(new(value)));
-                        string selected = await serviceProvider.GetRequiredService<GameServerCoexistenceService>().SelectOrConvertAsync(executable, launchScheme, false, progress, CancellationToken.None).ConfigureAwait(false);
+                        string selected = await serviceProvider.GetRequiredService<GameServerCoexistenceService>().SelectOrConvertAsync(executable, launchScheme, progress, CancellationToken.None).ConfigureAwait(false);
                         await taskContext.SwitchToMainThreadAsync();
                         launchOptions.PerformGamePathEntrySynchronization(selected);
                     }
@@ -244,7 +244,7 @@ public sealed partial class LaunchGameShared
             {
                 using BlockDeferral<Snap.Hutao.Remastered.Service.Game.Package.PackageConvertStatus> deferral = await viewModel.CreateConvertBlockDeferralAsync().ConfigureAwait(false);
                 IProgress<string> progress = new Progress<string>(value => deferral.Progress.Report(new(value)));
-                string selected = await serviceProvider.GetRequiredService<GameServerCoexistenceService>().SelectOrConvertAsync(executable, scheme, true, progress, CancellationToken.None).ConfigureAwait(false);
+                string selected = await serviceProvider.GetRequiredService<GameServerCoexistenceService>().SelectOrConvertAsync(executable, scheme, progress, CancellationToken.None).ConfigureAwait(false);
                 await taskContext.SwitchToMainThreadAsync();
                 launchOptions.PerformGamePathEntrySynchronization(selected);
                 return;
