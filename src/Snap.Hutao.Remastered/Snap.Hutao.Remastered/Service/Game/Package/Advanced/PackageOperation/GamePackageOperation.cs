@@ -5,6 +5,7 @@ using Snap.Hutao.Remastered.Service.Game.Package.Advanced.Model;
 using Snap.Hutao.Remastered.Web.Hoyolab.Takumi.Downloader.Proto;
 using System.Diagnostics;
 using System.IO;
+using Snap.Hutao.Remastered.Service.Game.Coexistence;
 
 namespace Snap.Hutao.Remastered.Service.Game.Package.Advanced.PackageOperation;
 
@@ -39,6 +40,12 @@ public abstract class GamePackageOperation : IGamePackageOperation
         }
 
         (int conflictedBlocks, long conflictedBytes) = info.GetConflictedBlockCountAndByteCount(context.Operation.GameChannelSDK);
+        if (GameCoexistenceVirtualDisk.Find(context.Operation.GameFileSystem.GameFilePath) is not null
+            && GameCoexistenceVirtualDisk.GetEffectiveAvailableBytes(context.Operation.EffectiveGameDirectory) < conflictedBytes + 1024L * 1024 * 1024)
+        {
+            throw new IOException("虚拟磁盘或宿主磁盘空间不足，无法完成独立资源修复。请释放空间后重试。");
+        }
+
         context.Progress.Report(new GamePackageOperationReport.Reset(SH.ServiceGamePackageAdvancedRepairing, conflictedBlocks, conflictedBytes));
 
         await context.Operation.Asset.RepairGamePackageAsync(context, info).ConfigureAwait(false);

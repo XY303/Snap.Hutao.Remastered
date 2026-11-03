@@ -41,11 +41,12 @@ public sealed partial class LaunchSchemeFilteredGameAccountsView : ObservableObj
 
     private IProperty<bool> IsViewUnloaded { get; }
 
-    public async ValueTask SetAsync(LaunchScheme? value, bool external = true)
+    public async ValueTask SetAsync(LaunchScheme? value, bool external = true, bool preserveSelectedAccount = false)
     {
         using (await syncRoot.LockAsync().ConfigureAwait(false))
         {
             await taskContext.SwitchToMainThreadAsync();
+            GameAccount? selectedAccount = preserveSelectedAccount ? View?.CurrentItem : null;
             if (!SetProperty(ref scheme, value, nameof(Scheme)))
             {
                 return;
@@ -68,6 +69,11 @@ public sealed partial class LaunchSchemeFilteredGameAccountsView : ObservableObj
             // Update GameAccountsView
             await taskContext.SwitchToMainThreadAsync();
             View.Filter = GameAccountFilter.Create(Scheme?.SchemeType);
+
+            if (selectedAccount is not null && selectedAccount.Type == Scheme?.SchemeType)
+            {
+                View.MoveCurrentTo(selectedAccount);
+            }
 
             // Try set to the current registry account.
             if (Scheme is null)

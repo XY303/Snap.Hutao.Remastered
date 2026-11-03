@@ -11,13 +11,15 @@ namespace Snap.Hutao.Remastered.Web.Hoyolab;
 
 public static class HoyolabOptions
 {
-    public const string UserAgent = $"Mozilla/5.0 (Windows NT 10.0; Win64; x64) miHoYoBBS/{SaltConstants.CNVersion}";
+    // Generated salt constants are unavailable during the WinUI temporary assembly pass.
+    // Initialize user agents at runtime instead of requiring compile-time constant evaluation.
+    public static readonly string UserAgent = $"Mozilla/5.0 (Windows NT 10.0; Win64; x64) miHoYoBBS/{SaltConstants.CNVersion}";
 
-    public const string UserAgentOversea = $"Mozilla/5.0 (Windows NT 10.0; Win64; x64) miHoYoBBSOversea/{SaltConstants.OSVersion}";
+    public static readonly string UserAgentOversea = $"Mozilla/5.0 (Windows NT 10.0; Win64; x64) miHoYoBBSOversea/{SaltConstants.OSVersion}";
 
-    public const string MobileUserAgent = $"Mozilla/5.0 (Linux; Android 15) Mobile miHoYoBBS/{SaltConstants.CNVersion}";
+    public static readonly string MobileUserAgent = $"Mozilla/5.0 (Linux; Android 15) Mobile miHoYoBBS/{SaltConstants.CNVersion}";
 
-    public const string MobileUserAgentOversea = $"Mozilla/5.0 (Linux; Android 15) Mobile miHoYoBBSOversea/{SaltConstants.OSVersion}";
+    public static readonly string MobileUserAgentOversea = $"Mozilla/5.0 (Linux; Android 15) Mobile miHoYoBBSOversea/{SaltConstants.OSVersion}";
 
     public const string HoyoPlayUserAgent = $"HYPContainer/1.1.4.133";
 

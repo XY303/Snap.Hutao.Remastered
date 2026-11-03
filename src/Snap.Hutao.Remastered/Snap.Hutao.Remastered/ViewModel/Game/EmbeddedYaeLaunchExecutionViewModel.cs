@@ -33,6 +33,11 @@ public sealed partial class EmbeddedYaeLaunchExecutionViewModel : IViewModelSupp
 
     GameAccount? IViewModelSupportLaunchExecution.GameAccount { get => CurrentSchemeFilteredGameAccountsView.View?.CurrentItem; }
 
+    ValueTask IViewModelSupportLaunchExecution.SetTargetSchemeAsync(LaunchScheme scheme)
+    {
+        return CurrentSchemeFilteredGameAccountsView.SetAsync(scheme, preserveSelectedAccount: true);
+    }
+
     ValueTask<BlockDeferral<PackageConvertStatus>> IViewModelSupportLaunchExecution.CreateConvertBlockDeferralAsync()
     {
         return BlockDeferral<PackageConvertStatus>.CreateAsync<LaunchGamePackageConvertDialog>(serviceProvider, static (state, dialog) => dialog.State = state);

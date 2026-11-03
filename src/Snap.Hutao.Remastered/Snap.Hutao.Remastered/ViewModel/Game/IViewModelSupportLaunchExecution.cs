@@ -16,5 +16,7 @@ public interface IViewModelSupportLaunchExecution
 
     GameAccount? GameAccount { get; }
 
+    ValueTask SetTargetSchemeAsync(LaunchScheme scheme);
+
     ValueTask<BlockDeferral<PackageConvertStatus>> CreateConvertBlockDeferralAsync();
 }

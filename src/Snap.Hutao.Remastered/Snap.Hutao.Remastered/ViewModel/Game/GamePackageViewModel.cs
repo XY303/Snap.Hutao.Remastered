@@ -8,6 +8,7 @@ using Snap.Hutao.Remastered.Core.Setting;
 using Snap.Hutao.Remastered.Factory.ContentDialog;
 using Snap.Hutao.Remastered.Service.Game;
 using Snap.Hutao.Remastered.Service.Game.Configuration;
+using Snap.Hutao.Remastered.Service.Game.Coexistence;
 using Snap.Hutao.Remastered.Service.Game.FileSystem;
 using Snap.Hutao.Remastered.Service.Game.Package;
 using Snap.Hutao.Remastered.Service.Game.Package.Advanced;
@@ -233,6 +234,10 @@ public sealed partial class GamePackageViewModel : Abstraction.ViewModel
             return;
         }
 
+        if (launchOptions.GamePathEntry.Value?.Path is { } selectedExecutable)
+        {
+            await GameCoexistenceVirtualDisk.EnsureMountedAsync(selectedExecutable).ConfigureAwait(false);
+        }
         if (launchGameShared.GetCurrentLaunchSchemeFromConfigurationFile() is not { } currentScheme)
         {
             return;
@@ -296,6 +301,11 @@ public sealed partial class GamePackageViewModel : Abstraction.ViewModel
                 {
                     // The chosen manifest has now been fully checked/repaired.
                     GameInstallationMetadataRepair.Commit(gameFileSystem.GameConfigurationFilePath, gameFileSystem.ScriptVersionFilePath, manifestVersion);
+                }
+
+                if (operationKind is GamePackageOperationKind.Verify)
+                {
+                    await serviceProvider.GetRequiredService<LaunchGameViewModel>().RefreshCoexistenceStatusAsync().ConfigureAwait(false);
                 }
             }
             finally

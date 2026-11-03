@@ -2,6 +2,7 @@
 // Licensed under the MIT license.
 
 using Microsoft.Extensions.Logging;
+using Snap.Hutao.Remastered.Service.Game.Coexistence;
 using Snap.Hutao.Remastered.Service.Game.FileSystem;
 
 namespace Snap.Hutao.Remastered.Service.Game.Configuration;
@@ -21,6 +22,10 @@ public sealed class GameInstallationService(LaunchOptions launchOptions, ITaskCo
     {
         await taskContext.SwitchToBackgroundAsync();
         token.ThrowIfCancellationRequested();
+        if (launchOptions.GamePathEntry.Value?.Path is { } executable)
+        {
+            await GameCoexistenceVirtualDisk.EnsureMountedAsync(executable, token).ConfigureAwait(false);
+        }
         const string LockTrace = $"{nameof(GameInstallationService)}.{nameof(RefreshAsync)}";
         if (launchOptions.TryGetGameFileSystem(LockTrace, out IGameFileSystem? fileSystem) != GameFileSystemErrorKind.None) { return null; }
         using (fileSystem)

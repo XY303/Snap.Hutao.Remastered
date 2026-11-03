@@ -931,8 +931,14 @@
                                     Description="{shuxm:ResourceString Name=ViewPageSettingControlMaterialDescription}"
                                     Header="{shuxm:ResourceString Name=ViewPageSettingControlMaterialHeader}"
                                     HeaderIcon="{shuxm:FontIcon Glyph=&#xE790;}">
-                                    <shuxc:SizeRestrictedContentControl>
-                                        <cwc:SwitchPresenter Value="{x:Bind shuxcth:MaterialBindingSource.Current.ComboBoxMaterial, Mode=OneWay}">
+                                    <shuxc:SizeRestrictedContentControl HorizontalContentAlignment="Right">
+                                        <cwc:SwitchPresenter
+                                            HorizontalAlignment="Right"
+                                            HorizontalContentAlignment="Stretch"
+                                            VerticalContentAlignment="Stretch"
+                                            IsTabStop="False"
+                                            Tag="LiquidGlass:ComboBox"
+                                            Value="{x:Bind shuxcth:MaterialBindingSource.Current.ComboBoxMaterial, Mode=OneWay}">
                                             <cwc:Case Value="{shuxm:Int32 Value=0}">
                                                 <ComboBox
                                                     shuxcth:ComboBoxPopupLifetime.IsManaged="True"

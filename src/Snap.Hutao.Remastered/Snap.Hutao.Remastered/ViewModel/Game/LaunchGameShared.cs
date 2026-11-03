@@ -1,4 +1,4 @@
-﻿// Copyright (c) DGP Studio. All rights reserved.
+// Copyright (c) DGP Studio. All rights reserved.
 // Licensed under the MIT license.
 // Copyright (c) Millennium-Science-Technology-R-D-Inst. All rights reserved.
 // Licensed under the MIT license.
@@ -7,9 +7,12 @@ using Snap.Hutao.Remastered.Core.ExceptionService;
 using Snap.Hutao.Remastered.Core.Logging;
 using Snap.Hutao.Remastered.Factory.ContentDialog;
 using Snap.Hutao.Remastered.Factory.Process;
+using Snap.Hutao.Remastered.Model.Entity.Primitive;
+using Snap.Hutao.Remastered.Model.Intrinsic;
 using Snap.Hutao.Remastered.Service.Game;
 using Snap.Hutao.Remastered.Service.Game.AdvancedStart;
 using Snap.Hutao.Remastered.Service.Game.AdvancedStart.Model;
+using Snap.Hutao.Remastered.Service.Game.Coexistence;
 using Snap.Hutao.Remastered.Service.Game.Configuration;
 using Snap.Hutao.Remastered.Service.Game.FileSystem;
 using Snap.Hutao.Remastered.Service.Game.Launching;
@@ -104,6 +107,67 @@ public sealed partial class LaunchGameShared
             DefaultLaunchExecutionInvoker invoker = new();
             try
             {
+                if (launchOptions.GamePathEntry.Value?.Path is { } selectedExecutable)
+                {
+                    await GameCoexistenceVirtualDisk.EnsureMountedAsync(selectedExecutable).ConfigureAwait(false);
+                }
+                LaunchScheme? launchScheme = viewModel.TargetScheme;
+                if (launchOptions.AutoSelectServer.Value)
+                {
+                    SchemeType? accountType = userAndUid?.Uid.Region.Value switch
+                    {
+                        "cn_gf01" => SchemeType.ChineseOfficial,
+                        "cn_qd01" => SchemeType.ChineseBilibili,
+                        "os_usa" or "os_euro" or "os_asia" or "os_cht" => SchemeType.Oversea,
+                        _ => null,
+                    };
+
+                    if (!launchOptions.UsingHoyolabAccount.Value)
+                    {
+                        accountType = viewModel.GameAccount?.Type ?? accountType;
+                    }
+
+                    if (KnownLaunchSchemes.GetDefaultForAccountType(accountType) is { } scheme)
+                    {
+                        launchScheme = scheme;
+                    }
+                }
+
+                if (launchScheme is not null)
+                {
+                    string? executable = launchOptions.GamePathEntry.Value?.Path;
+                    if (launchOptions.CoexistenceEnabled.Value && executable is not null)
+                    {
+                        using BlockDeferral<Snap.Hutao.Remastered.Service.Game.Package.PackageConvertStatus> deferral = await viewModel.CreateConvertBlockDeferralAsync().ConfigureAwait(false);
+                        IProgress<string> progress = new Progress<string>(value => deferral.Progress.Report(new(value)));
+                        string selected = await serviceProvider.GetRequiredService<GameServerCoexistenceService>().SelectOrConvertAsync(executable, launchScheme, progress, CancellationToken.None).ConfigureAwait(false);
+                        await taskContext.SwitchToMainThreadAsync();
+                        launchOptions.PerformGamePathEntrySynchronization(selected);
+                    }
+                    else if (executable is not null && GameServerCoexistenceStorage.ReadState(GameServerCoexistenceStorage.GetRoot(executable)) is not null)
+                    {
+                        if (launchScheme.Channel is not ChannelType.Official || launchScheme.SubChannel is not SubChannelType.Default)
+                        {
+                            throw HutaoException.InvalidOperation(SH.GameCoexistenceConvertBlocked);
+                        }
+
+                        string target = GameServerCoexistenceStorage.GetCounterpart(executable, launchScheme.IsOversea)!;
+                        GameServerCoexistenceService.InspectInstallation(target);
+                        if (!target.Equals(executable, StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (await GameLifeCycle.IsGameRunningAsync(taskContext).ConfigureAwait(false))
+                            {
+                                throw HutaoException.InvalidOperation(SH.ServiceGameLaunchExecutionGameIsRunning);
+                            }
+
+                            await taskContext.SwitchToMainThreadAsync();
+                            launchOptions.PerformGamePathEntrySynchronization(target);
+                        }
+                    }
+
+                    await viewModel.SetTargetSchemeAsync(launchScheme).ConfigureAwait(false);
+                }
+
                 LaunchExecutionInvocationContext context = new()
                 {
                     ViewModel = viewModel,
@@ -176,6 +240,26 @@ public sealed partial class LaunchGameShared
         ConvertOnlyLaunchExecutionInvoker invoker = new();
         try
         {
+            if (launchOptions.CoexistenceEnabled.Value && viewModel.TargetScheme is { } scheme && launchOptions.GamePathEntry.Value?.Path is { } executable)
+            {
+                using BlockDeferral<Snap.Hutao.Remastered.Service.Game.Package.PackageConvertStatus> deferral = await viewModel.CreateConvertBlockDeferralAsync().ConfigureAwait(false);
+                IProgress<string> progress = new Progress<string>(value => deferral.Progress.Report(new(value)));
+                await serviceProvider.GetRequiredService<GameServerCoexistenceService>().SelectOrConvertAsync(executable, scheme, progress, CancellationToken.None).ConfigureAwait(false);
+                await taskContext.SwitchToMainThreadAsync();
+                // Adding a server prepares an installation; selecting/automatic launch chooses it later.
+                if (GetCurrentLaunchSchemeFromConfigurationFile(false) is { } currentScheme)
+                {
+                    await viewModel.SetTargetSchemeAsync(currentScheme).ConfigureAwait(false);
+                }
+
+                if (viewModel is LaunchGameViewModel launchViewModel)
+                {
+                    await launchViewModel.RefreshCoexistenceStatusAsync().ConfigureAwait(false);
+                }
+
+                messenger.Send(InfoBarMessage.Success(SH.GameCoexistenceServerReady));
+                return;
+            }
             using (IServiceScope scope = serviceProvider.CreateScope())
             {
                 LaunchExecutionInvocationContext context = new()

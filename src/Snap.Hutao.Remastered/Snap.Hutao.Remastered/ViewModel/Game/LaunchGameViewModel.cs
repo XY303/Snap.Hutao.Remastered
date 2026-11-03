@@ -90,7 +90,7 @@ public sealed partial class LaunchGameViewModel : Abstraction.ViewModel, IViewMo
 
     public IReadOnlyObservableProperty<string> DisplayGamePath { get => field ??= Property.Observe(LaunchOptions.GamePathEntry, static entry => SH.FormatViewModelLaunchGameDisplayGamePath(entry?.Path)); }
 
-    public IReadOnlyObservableProperty<bool> GamePathEntryValid { get => field ??= Property.Observe(LaunchOptions.GamePathEntry, static entry => !string.IsNullOrEmpty(entry?.Path)).WithValueChangedCallback(static (v, vm) => vm.HandleGamePathEntryChangeAsync().SafeForget(), this); }
+    public IReadOnlyObservableProperty<bool> GamePathEntryValid { get => field ??= Property.Observe(LaunchOptions.GamePathEntry.WithValueChangedCallback(static (_, vm) => vm.HandleGamePathEntryChangeAsync().SafeForget(), this), static entry => !string.IsNullOrEmpty(entry?.Path)); }
 
     public IReadOnlyObservableProperty<bool> IsIslandConnected { get => GameLifeCycle.IsIslandConnected.AsReadOnly(); }
 
@@ -152,12 +152,18 @@ public sealed partial class LaunchGameViewModel : Abstraction.ViewModel, IViewMo
                 await taskContext.SwitchToMainThreadAsync();
                 await TargetSchemeFilteredGameAccountsView.SetAsync(currentScheme).ConfigureAwait(true);
                 await GamePackageViewModel.ReloadAsync().ConfigureAwait(true);
+                await RefreshCoexistenceStatusAsync().ConfigureAwait(true);
             }
         }
         catch (HutaoException ex)
         {
             messenger.Send(InfoBarMessage.Error(ex));
         }
+    }
+
+    ValueTask IViewModelSupportLaunchExecution.SetTargetSchemeAsync(LaunchScheme scheme)
+    {
+        return TargetSchemeFilteredGameAccountsView.SetAsync(scheme, preserveSelectedAccount: true);
     }
 
     ValueTask<BlockDeferral<PackageConvertStatus>> IViewModelSupportLaunchExecution.CreateConvertBlockDeferralAsync()

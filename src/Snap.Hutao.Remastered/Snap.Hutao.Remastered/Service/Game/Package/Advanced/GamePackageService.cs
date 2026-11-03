@@ -7,8 +7,10 @@ using Snap.Hutao.Remastered.Core.IO.Hashing;
 using Snap.Hutao.Remastered.Core.Threading.RateLimiting;
 using Snap.Hutao.Remastered.Factory.IO;
 using Snap.Hutao.Remastered.Factory.Progress;
-using Snap.Hutao.Remastered.Service.Game.FileSystem;
+using Snap.Hutao.Remastered.Service.Game.Coexistence;
 using Snap.Hutao.Remastered.Service.Game.Configuration;
+using Snap.Hutao.Remastered.Service.Game.FileSystem;
+using Snap.Hutao.Remastered.Service.Game.Launching.Invoker;
 using Snap.Hutao.Remastered.Service.Game.Package.Advanced.Model;
 using Snap.Hutao.Remastered.Service.Game.Package.Advanced.PackageOperation;
 using Snap.Hutao.Remastered.Service.Notification;
@@ -51,8 +53,27 @@ public sealed partial class GamePackageService : IGamePackageService
     [GeneratedConstructor]
     public partial GamePackageService(IServiceProvider serviceProvider);
 
+    public bool IsOperationRunning
+    {
+        get
+        {
+            lock (operationStateLock)
+            {
+                return operationTcs is { Task.IsCompleted: false };
+            }
+        }
+    }
+
     public async ValueTask<bool> ExecuteOperationAsync(GamePackageOperationContext operationContext)
     {
+        // Install/extract contexts may not own a normal GameFileSystem read lock.
+        // Keep association/unpairing excluded for the entire package operation, not just detach.
+        if (!serviceProvider.GetRequiredService<LaunchOptions>().GamePathLock.TryReaderLock(nameof(GamePackageService), out AsyncReaderWriterLock.Releaser pathAccess))
+        {
+            throw new InvalidOperationException(SH.GameCoexistenceOperationBusy);
+        }
+
+        using AsyncReaderWriterLock.Releaser packagePathAccess = pathAccess;
         if (operationContext.InstallationAtPreparation is { } prepared)
         {
             IGameFileSystemView fs = operationContext.GameFileSystem;
@@ -78,6 +99,35 @@ public sealed partial class GamePackageService : IGamePackageService
             continueTcs = continueTcsLocal;
             operationResumeEvent = operationResumeEventLocal;
         }
+
+        using OperationCompletion completion = new(() =>
+        {
+            operationTcsLocal.TrySetResult();
+            operationCtsLocal.Dispose();
+
+            lock (operationStateLock)
+            {
+                if (ReferenceEquals(operationCts, operationCtsLocal))
+                {
+                    operationCts = null;
+                }
+
+                if (ReferenceEquals(operationTcs, operationTcsLocal))
+                {
+                    operationTcs = null;
+                }
+
+                if (ReferenceEquals(continueTcs, continueTcsLocal))
+                {
+                    continueTcs = null;
+                }
+
+                if (ReferenceEquals(operationResumeEvent, operationResumeEventLocal))
+                {
+                    operationResumeEvent = null;
+                }
+            }
+        });
 
         ParallelOptions options = new()
         {
@@ -135,7 +185,46 @@ public sealed partial class GamePackageService : IGamePackageService
                     {
                         try
                         {
+                            string executableName = operationContext.GameFileSystem.IsExecutableOversea ? "GenshinImpact.exe" : "YuanShen.exe";
+                            if (GameVersionLibrary.FindEntry(System.IO.Path.Combine(operationContext.EffectiveGameDirectory, executableName)) is { Pending: true })
+                            {
+                                throw new InvalidOperationException("版本创建未完成，请重新从完整安装转换。中断的版本不能启动或更新。");
+                            }
+                            GameServerCoexistenceState? coexistence = GameServerCoexistenceStorage.ReadState(operationContext.EffectiveGameDirectory);
+                            if (coexistence is { CreationPending: true }
+                                && (coexistence.Format == 1 || operationContext.Kind is not GamePackageOperationKind.Verify))
+                            {
+                                throw new InvalidOperationException(SH.GameCoexistenceCreationPending);
+                            }
+
+                            if (coexistence is not null && AbstractLaunchExecutionInvoker.Invoking())
+                            {
+                                throw new InvalidOperationException(SH.GameCoexistenceOperationBusy);
+                            }
+
+                            if (coexistence is not null && await GameLifeCycle.IsGameRunningAsync(taskContext).ConfigureAwait(false))
+                            {
+                                throw new InvalidOperationException(SH.ServiceGameLaunchExecutionGameIsRunning);
+                            }
+
+                            // Verify can repair, and predownloads may be consumed by external updaters.
+                            // Restore independent resources inside the cancellable/retryable window.
+                            if (coexistence is { Format: 1, SharedFiles.Count: > 0 })
+                            {
+                                progress.Report(new GamePackageOperationReport.Reset(SH.FormatGameCoexistenceRestoring(string.Empty)));
+                            }
+
+                            await GameServerCoexistenceStorage.DetachAsync(
+                                operationContext.EffectiveGameDirectory,
+                                new CoexistenceProgress(progress),
+                                operationCtsLocal.Token,
+                                () => serviceContext.WaitForExecutionAsync().AsTask()).ConfigureAwait(false);
+                            await serviceContext.WaitForExecutionAsync().ConfigureAwait(false);
                             await operation.ExecuteAsync(serviceContext).ConfigureAwait(false);
+                            if (operationContext.Kind is GamePackageOperationKind.Verify)
+                            {
+                                GameServerCoexistenceStorage.MarkVirtualInstallationRepaired(operationContext.EffectiveGameDirectory);
+                            }
                             result = true;
                             break;
                         }
@@ -185,36 +274,30 @@ public sealed partial class GamePackageService : IGamePackageService
                 }
                 finally
                 {
-                    operationTcsLocal.TrySetResult();
-                    operationCtsLocal.Dispose();
-
-                    lock (operationStateLock)
-                    {
-                        if (ReferenceEquals(operationCts, operationCtsLocal))
-                        {
-                            operationCts = null;
-                        }
-
-                        if (ReferenceEquals(operationTcs, operationTcsLocal))
-                        {
-                            operationTcs = null;
-                        }
-
-                        if (ReferenceEquals(continueTcs, continueTcsLocal))
-                        {
-                            continueTcs = null;
-                        }
-
-                        if (ReferenceEquals(operationResumeEvent, operationResumeEventLocal))
-                        {
-                            operationResumeEvent = null;
-                        }
-                    }
+                    completion.Dispose();
                 }
             }
 
             await window.CloseTask.ConfigureAwait(false);
             return result;
+        }
+    }
+
+    private sealed class OperationCompletion(Action complete) : IDisposable
+    {
+        private Action? action = complete;
+
+        public void Dispose()
+        {
+            Interlocked.Exchange(ref action, null)?.Invoke();
+        }
+    }
+
+    private sealed class CoexistenceProgress(IProgress<GamePackageOperationReport> progress) : IProgress<string>
+    {
+        public void Report(string value)
+        {
+            progress.Report(new GamePackageOperationReport.Install(0, 0, value));
         }
     }
 

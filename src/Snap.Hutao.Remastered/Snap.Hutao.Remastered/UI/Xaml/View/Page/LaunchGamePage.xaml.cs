@@ -15,6 +15,7 @@ public sealed partial class LaunchGamePage : ScopedPage
 {
     private bool isInitializing;
     private bool isFastSkipTalkConfirmationPending;
+    private bool isCoexistenceTogglePending;
 
     public LaunchGamePage()
     {
@@ -38,9 +39,23 @@ public sealed partial class LaunchGamePage : ScopedPage
             TransientResinAllowedToggleSwitch.IsOn = launchOptions.ResinListItemId107012Allowed.Value;
             CondensedResinAllowedToggleSwitch.IsOn = launchOptions.ResinListItemId220007Allowed.Value;
             FastSkipTalkToggleSwitch.IsOn = launchOptions.FastSkipTalk.Value;
+            CoexistenceToggleSwitch.IsOn = launchOptions.CoexistenceEnabled.Value;
         }
 
         isInitializing = false;
+    }
+
+    private async void CoexistenceToggleSwitch_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (isInitializing || isCoexistenceTogglePending || sender is not ToggleSwitch toggle || DataContext is not LaunchGameViewModel vm) { return; }
+        isCoexistenceTogglePending = true;
+        try
+        {
+            await vm.SetCoexistenceEnabledAsync(toggle.IsOn);
+            toggle.IsOn = vm.LaunchOptions.CoexistenceEnabled.Value;
+            await vm.RefreshCoexistenceStatusAsync();
+        }
+        finally { isCoexistenceTogglePending = false; }
     }
 
     // 为什么用 Code-Behind 而非 ViewModel：

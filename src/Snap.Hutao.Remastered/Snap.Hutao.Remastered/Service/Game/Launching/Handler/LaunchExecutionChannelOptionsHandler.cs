@@ -3,6 +3,8 @@
 
 using Snap.Hutao.Remastered.Core.ExceptionService;
 using Snap.Hutao.Remastered.Core.IO.Ini;
+using Snap.Hutao.Remastered.Model.Intrinsic;
+using Snap.Hutao.Remastered.Service.Game.Coexistence;
 using Snap.Hutao.Remastered.Service.Game.Configuration;
 using Snap.Hutao.Remastered.Service.Game.FileSystem;
 using Snap.Hutao.Remastered.Service.Game.Launching.Context;
@@ -15,6 +17,25 @@ public sealed class LaunchExecutionChannelOptionsHandler : AbstractLaunchExecuti
 {
     public override ValueTask BeforeAsync(BeforeLaunchExecutionContext context)
     {
+        if (GameServerCoexistenceStorage.ReadState(context.FileSystem.GameDirectory) is { CreationPending: true })
+        {
+            throw HutaoException.InvalidOperation(SH.GameCoexistenceCreationPending);
+        }
+
+        if (GameServerCoexistenceStorage.ReadState(context.FileSystem.GameDirectory) is not null
+            && (context.TargetScheme.IsOversea != context.FileSystem.IsExecutableOversea
+                || context.TargetScheme.Channel is not ChannelType.Official
+                || context.TargetScheme.SubChannel is not SubChannelType.Default))
+        {
+            throw HutaoException.InvalidOperation(SH.GameCoexistenceConvertBlocked);
+        }
+
+        if (GameVersionLibrary.FindEntry(context.FileSystem.GameFilePath) is { } entry
+            && (entry.Pending || entry.IsOversea != context.TargetScheme.IsOversea || entry.Channel != (int)context.TargetScheme.Channel || entry.SubChannel != (int)context.TargetScheme.SubChannel))
+        {
+            throw HutaoException.InvalidOperation("共存版本尚未完成或区服不匹配，请在胡桃中选择对应版本或重新转换。");
+        }
+
         string configPath = context.FileSystem.GameConfigurationFilePath;
 
         IniElement[]? elements;
