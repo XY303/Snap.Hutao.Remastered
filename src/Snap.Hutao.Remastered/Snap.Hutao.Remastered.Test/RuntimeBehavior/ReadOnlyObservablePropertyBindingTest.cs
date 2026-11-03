@@ -6,6 +6,27 @@ namespace Snap.Hutao.Remastered.Test.RuntimeBehavior;
 public sealed class ReadOnlyObservablePropertyBindingTest
 {
     [TestMethod]
+    public void SwitchingBetweenValidPathsRefreshesTheInstallationEvenWhenValidityStaysTrue()
+    {
+        ObservableProperty<string?> path = new(@"D:\versions\cn\YuanShen.exe");
+        List<string?> refreshedPaths = [];
+        IObservableProperty<string?> observedPath = new ObservablePropertyValueChangedCallbackWrapper<string?, List<string?>>(path, static (value, paths) => paths.Add(value), refreshedPaths);
+        IReadOnlyObservableProperty<bool> valid = new ObservablePropertyObserver<string?, bool>(observedPath, static value => !string.IsNullOrEmpty(value));
+        int validityChanges = 0;
+        valid.PropertyChanged += (_, _) => validityChanges++;
+        Assert.IsTrue(valid.Value);
+        path.Value = @"D:\versions\os\GenshinImpact.exe";
+        path.Value = @"D:\versions\cn\YuanShen.exe";
+        Assert.IsTrue(valid.Value);
+        Assert.AreEqual(0, validityChanges);
+        CollectionAssert.AreEqual(new string?[] { @"D:\versions\os\GenshinImpact.exe", @"D:\versions\cn\YuanShen.exe" }, refreshedPaths);
+        path.Value = null;
+        Assert.IsFalse(valid.Value);
+        Assert.AreEqual(1, validityChanges);
+        Assert.AreEqual(3, refreshedPaths.Count);
+    }
+
+    [TestMethod]
     public void CompiledBindingCanReadTheReadOnlyValueFromNotificationSender()
     {
         ObservableProperty<bool> source = new(true);

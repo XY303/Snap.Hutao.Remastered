@@ -244,9 +244,20 @@ public sealed partial class LaunchGameShared
             {
                 using BlockDeferral<Snap.Hutao.Remastered.Service.Game.Package.PackageConvertStatus> deferral = await viewModel.CreateConvertBlockDeferralAsync().ConfigureAwait(false);
                 IProgress<string> progress = new Progress<string>(value => deferral.Progress.Report(new(value)));
-                string selected = await serviceProvider.GetRequiredService<GameServerCoexistenceService>().SelectOrConvertAsync(executable, scheme, progress, CancellationToken.None).ConfigureAwait(false);
+                await serviceProvider.GetRequiredService<GameServerCoexistenceService>().SelectOrConvertAsync(executable, scheme, progress, CancellationToken.None).ConfigureAwait(false);
                 await taskContext.SwitchToMainThreadAsync();
-                launchOptions.PerformGamePathEntrySynchronization(selected);
+                // Adding a server prepares an installation; selecting/automatic launch chooses it later.
+                if (GetCurrentLaunchSchemeFromConfigurationFile(false) is { } currentScheme)
+                {
+                    await viewModel.SetTargetSchemeAsync(currentScheme).ConfigureAwait(false);
+                }
+
+                if (viewModel is LaunchGameViewModel launchViewModel)
+                {
+                    await launchViewModel.RefreshCoexistenceStatusAsync().ConfigureAwait(false);
+                }
+
+                messenger.Send(InfoBarMessage.Success(SH.GameCoexistenceServerReady));
                 return;
             }
             using (IServiceScope scope = serviceProvider.CreateScope())

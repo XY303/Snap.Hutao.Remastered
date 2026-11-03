@@ -2,10 +2,13 @@
 // Licensed under the MIT license.
 
 using Microsoft.UI.Xaml.Controls;
+using Snap.Hutao.Remastered.Core.Property;
 using Snap.Hutao.Remastered.Factory.ContentDialog;
 using Snap.Hutao.Remastered.Service.Game;
 using Snap.Hutao.Remastered.Service.Game.FileSystem;
 using Snap.Hutao.Remastered.Service.Game.Coexistence;
+using Snap.Hutao.Remastered.Service.Game.Configuration;
+using Snap.Hutao.Remastered.Service.Game.Scheme;
 using Snap.Hutao.Remastered.Service.Notification;
 using System.IO;
 
@@ -22,6 +25,10 @@ public sealed partial class LaunchGameViewModel
     public IReadOnlyList<GameVersionEntry> CoexistenceDeletableVersions { get; private set => SetProperty(ref field, value); } = [];
     public GameVersionEntry? SelectedCoexistenceDeletionVersion { get; set => SetProperty(ref field, value); }
     public GameVersionEntry? SelectedCoexistenceVersion { get; set => SetProperty(ref field, value); }
+
+    public IReadOnlyObservableProperty<string> ConvertSchemeHeader { get => field ??= Property.Observe(LaunchOptions.CoexistenceEnabled, static enabled => enabled ? SH.GameCoexistenceAddServerHeader : SH.ViewPageLaunchGameSwitchSchemeHeader); }
+    public IReadOnlyObservableProperty<string> ConvertSchemeDescription { get => field ??= Property.Observe(LaunchOptions.CoexistenceEnabled, static enabled => enabled ? SH.GameCoexistenceAddServerDescription : SH.ViewPageLaunchGameSwitchSchemeDescription); }
+    public IReadOnlyObservableProperty<string> ConvertSchemeAction { get => field ??= Property.Observe(LaunchOptions.CoexistenceEnabled, static enabled => enabled ? SH.GameCoexistenceAddServerAction : SH.ViewPageLaunchGameSwitchSchemeAction); }
 
     internal async ValueTask RefreshCoexistenceStatusAsync(bool refreshSpace = true)
     {
@@ -110,9 +117,14 @@ public sealed partial class LaunchGameViewModel
         GameVirtualDiskInfo disk = GameCoexistenceVirtualDisk.ReadDescriptor(LaunchOptions.CoexistenceContainer.Value) ?? throw new IOException("找不到虚拟磁盘。");
         await GameCoexistenceVirtualDisk.EnsureMountedAsync(disk, token).ConfigureAwait(false);
         string selected = entry.GetExecutable(disk);
-        GameServerCoexistenceService.InspectInstallation(selected);
-        await taskContext.SwitchToMainThreadAsync();
-        LaunchOptions.PerformGamePathEntrySynchronization(selected);
+        GameInstallationInfo installation = GameServerCoexistenceService.InspectInstallation(selected);
+        // Finish older path refreshes before updating both the executable and target scheme.
+        using (await EnterCriticalSectionAsync().ConfigureAwait(false))
+        {
+            await taskContext.SwitchToMainThreadAsync();
+            LaunchOptions.PerformGamePathEntrySynchronization(selected);
+            await TargetSchemeFilteredGameAccountsView.SetAsync(KnownLaunchSchemes.Values.Single(scheme => scheme.Equals(installation.Channel))).ConfigureAwait(false);
+        }
     });
 
     [Command("DeleteCoexistenceVersionCommand")]

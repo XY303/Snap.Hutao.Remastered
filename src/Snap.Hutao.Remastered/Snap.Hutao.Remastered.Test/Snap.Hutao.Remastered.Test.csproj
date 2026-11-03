@@ -30,6 +30,8 @@
     <Compile Include="../Snap.Hutao.Remastered/Core/Property/IProperty.cs" Link="Production/Property/IProperty.cs" />
     <Compile Include="../Snap.Hutao.Remastered/Core/Property/IReadOnlyProperty.cs" Link="Production/Property/IReadOnlyProperty.cs" />
     <Compile Include="../Snap.Hutao.Remastered/Core/Property/IReadOnlyObservableProperty.cs" Link="Production/Property/IReadOnlyObservableProperty.cs" />
+    <Compile Include="../Snap.Hutao.Remastered/Core/Property/ObservablePropertyObserver.cs" Link="Production/Property/ObservablePropertyObserver.cs" />
+    <Compile Include="../Snap.Hutao.Remastered/Core/Property/ObservablePropertyValueChangedCallbackWrapper.cs" Link="Production/Property/ObservablePropertyValueChangedCallbackWrapper.cs" />
     <Compile Include="../Snap.Hutao.Remastered/Core/Property/ObservablePropertyReadOnlyWrapper.cs" Link="Production/Property/ObservablePropertyReadOnlyWrapper.cs" />
     <Compile Include="../Snap.Hutao.Remastered/Core/Property/IObservableProperty.cs" Link="Production/Property/IObservableProperty.cs" />
     <Compile Include="../Snap.Hutao.Remastered/Core/Property/INotifyPropertyChangedDeferral.cs" Link="Production/Property/INotifyPropertyChangedDeferral.cs" />
