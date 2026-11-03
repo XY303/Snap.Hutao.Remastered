@@ -50,3 +50,21 @@ ISCC.exe /DMyAppVersion=2.0.2.0 Installer/installer.iss
 构建脚本不会在构建电脑上添加根信任。首次运行安装包时根证书尚未安装，因此仍可能出现 Windows 发布者或 SmartScreen 提示。ZIP 本身不执行证书导入。签名和本地导入根证书不保证获得 SmartScreen 信誉。
 
 手动编译可指定 `/DRootCertificatePath=<DER 公钥证书>` 和 `/DRootCertificateThumbprint=<40 位指纹>`；指纹使用 SHA1 作为 X.509 证书标识，文件签名使用 SHA256。不提供根证书参数时，现有 CI 的叶证书 `TrustedPeople` 流程继续生效。官方仓库历史上使用过根证书导入，目前安装脚本使用叶证书信任；本地根证书模式是本仓库单独启用的选项。
+
+## Visual Studio 一键构建签名安装包
+
+普通“生成 Release”只编译应用，“发布 FolderProfile”只生成发布目录。要生成带完整资源和本地签名的 EXE 安装包，在 Visual Studio 的“工具 → 外部工具 → 添加”配置以下项目：
+
+- 标题：`构建胡桃签名安装包`
+- 命令：PowerShell 7.4+ 的 `pwsh.exe` 完整路径（不是 Windows 自带的 `powershell.exe`）。
+- 初始目录：`$(SolutionDir)..\..`，适用于 `src/Snap.Hutao.Remastered/Snap.Hutao.Remastered.slnx`。
+- 勾选“使用输出窗口”。
+- 参数如下，替换 Inno Setup 和 Windows SDK 工具路径：
+
+```text
+-NoProfile -File "$(SolutionDir)..\..\scripts\BuildInstaller.ps1" -InnoSetupCompiler "C:\工具路径\Inno Setup\ISCC.exe" -SignTool "D:\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
+```
+
+该入口使用解决方案所在仓库的源码，自动执行 Release/x64 自包含发布，将生成清单及完整 `Assets`、`Resource` 目录复制到独立打包目录，然后复用已有本地证书签名。默认输出为仓库根目录的 `artifacts/installer/`，包含安装包、ZIP、公开证书和校验清单；可追加 `-OutputDirectory "D:\Relesses\MyBuild"`。普通 F5/生成不会触发打包。
+
+准备条件：本机安装项目所需 .NET 11 SDK（当前为预览版本，VS 中需允许使用预览 .NET SDK）、Windows SDK、PowerShell 7.4+、Inno Setup，并已按上节生成本地签名身份。应用版本取自 `Package.appxmanifest`；日后发布新版本时更新该文件中的 `Identity Version`。现有签名私钥只能由创建它的 Windows 用户使用。
