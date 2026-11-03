@@ -30,6 +30,12 @@ public sealed class LaunchExecutionChannelOptionsHandler : AbstractLaunchExecuti
             throw HutaoException.InvalidOperation(SH.GameCoexistenceConvertBlocked);
         }
 
+        if (GameVersionLibrary.FindEntry(context.FileSystem.GameFilePath) is { } entry
+            && (entry.Pending || entry.IsOversea != context.TargetScheme.IsOversea || entry.Channel != (int)context.TargetScheme.Channel || entry.SubChannel != (int)context.TargetScheme.SubChannel))
+        {
+            throw HutaoException.InvalidOperation("共存版本尚未完成或区服不匹配，请在胡桃中选择对应版本或重新转换。");
+        }
+
         string configPath = context.FileSystem.GameConfigurationFilePath;
 
         IniElement[]? elements;

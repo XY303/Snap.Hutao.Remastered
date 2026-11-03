@@ -31,8 +31,7 @@ public sealed partial class GameServerCoexistenceService
         bool oversea = Path.GetFileName(executable).Equals(GameConstants.GenshinImpactFileName, StringComparison.OrdinalIgnoreCase);
         string data = oversea ? GameConstants.GenshinImpactData : GameConstants.YuanShenData;
         GameInstallationInfo installation = GameInstallationReader.Read(executable, Path.Combine(root, GameConstants.ConfigFileName), Path.Combine(root, data, "Persistent", "ScriptVersion"), oversea);
-        if (!File.Exists(executable) || installation.HasVersionProblem || installation.Channel.Channel is not ChannelType.Official
-            || installation.Channel.SubChannel is not SubChannelType.Default || !Directory.Exists(Path.Combine(root, data, "StreamingAssets")))
+        if (!File.Exists(executable) || installation.HasVersionProblem || !KnownLaunchSchemes.Values.Any(s => s.IsNotCompatOnly && s.Equals(installation.Channel)) || !Directory.Exists(Path.Combine(root, data, "StreamingAssets")))
         {
             throw HutaoException.InvalidOperation(SH.GameCoexistenceInstallationInvalid);
         }

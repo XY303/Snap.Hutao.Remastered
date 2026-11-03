@@ -168,11 +168,15 @@ public static class GameCoexistenceVirtualDisk
         }
     }
 
-    public static async Task<GameVirtualDiskInfo> CreateAsync(string sourceExecutable, long sourceBytes, CancellationToken token)
+    public static Task<GameVirtualDiskInfo> CreateAsync(string sourceExecutable, long sourceBytes, CancellationToken token)
+        => CreateAtAsync(GetContainer(sourceExecutable), sourceBytes, token);
+
+    public static async Task<GameVirtualDiskInfo> CreateAtAsync(string container, long sourceBytes, CancellationToken token)
     {
         RequireAdministrator();
         token.ThrowIfCancellationRequested();
-        GameVirtualDiskInfo layout = GetLayout(sourceExecutable);
+        GameVirtualDiskInfo layout = new(Path.GetFullPath(container), string.Empty);
+        if (!layout.Container.EndsWith(".hutao-vdisk", StringComparison.OrdinalIgnoreCase)) { throw new IOException("Invalid container suffix."); }
         GameServerCoexistenceStorage.EnsureOrdinaryPath(layout.Container);
         if (Directory.Exists(layout.Container) || File.Exists(layout.Container))
         {

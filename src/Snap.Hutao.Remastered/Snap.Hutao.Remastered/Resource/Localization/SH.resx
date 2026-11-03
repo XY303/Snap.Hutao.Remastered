@@ -6219,7 +6219,7 @@
     <value>虚拟磁盘双服共存（实验性）</value>
   </data>
   <data name="GameCoexistenceCardDescription" xml:space="preserve">
-    <value>从当前完整客户端创建 ReFS VHDX，在盘内同时安装官服默认与国际服默认。相同大型资源使用写时复制；小文件独立复制。首次需复制完整客户端、管理员权限和额外空间。存在兼容性问题及无法预见的错误。</value>
+    <value>选择位置创建 ReFS 虚拟磁盘。开启后每次转换会新增独立版本，支持启动页面可选的各区服和渠道；关闭后恢复原安装的转换流程。可手动扫描占用和执行块克隆优化。</value>
   </data>
   <data name="GameCoexistenceCreateButton" xml:space="preserve">
     <value>创建虚拟磁盘双服</value>
@@ -6231,15 +6231,13 @@
     <value>实验性功能：请先阅读兼容性风险</value>
   </data>
   <data name="GameCoexistenceRiskDescription" xml:space="preserve">
-    <value>此功能先把当前完整客户端复制到新建的 ReFS 虚拟磁盘，再根据官方区服转换清单下载差异资源，生成国服 YuanShen.exe 和国际服 GenshinImpact.exe。原安装保留不动。仅支持官服默认与国际服默认，不支持 bilibili 或两服同时运行。
+    <value>此实验功能把完整游戏导入您选择位置的新建 ReFS VHDX。开启后每次转换先复制为独立安装，再使用原有官方转换清单和渠道 SDK 处理差异，支持启动页面可选择的区服和渠道（含 bilibili）。此前版本保留，不支持同时运行多个游戏进程。
 
-相同大型资源通过 ReFS 块克隆共享底层数据，修改时自动分离；程序、配置、SDK、运行时数据和小文件独立复制，不使用硬链接。首次创建仍需一份完整客户端的实际空间，并需要管理员权限、Windows ReFS 格式化/块克隆及 Storage PowerShell 支持。系统不支持时停止，不安装驱动、不修改安全设置、不回退硬链接。
+大文件在同一 ReFS 卷中直接使用块克隆，共享底层数据，写入自动分离；小文件独立复制。不使用硬链接。手动空间优化仅对内容完全相同的大文件重新共享数据块，释放虚拟盘内部空间，不会自动缩小宿主 VHDX。
 
-这是实验性功能。原神、反作弊、游戏内热更新与官方启动器在此虚拟磁盘上的兼容性尚未验证，可能引发无法预见的错误，包括无法启动、资源损坏、更新失败、掉盘和重新下载。写时复制不是备份，请先备份。
+首次导入需完整游戏的实际空间及至少 16 GiB 余量。动态虚拟盘会增长，仍须关注宿主可用空间。需要管理员权限、Windows ReFS 格式化、块克隆及 Storage PowerShell 支持；不支持时停止。
 
-请仅通过胡桃启动、更新与修复。重启后首次使用可能需要以管理员身份重新挂载。动态虚拟盘的可用容量不等于宿主磁盘剩余空间，两服更新分歧会增加实际占用；不会自动扩容或压缩。不要在游戏或更新运行时卸载、移动或删除 VHDX 与描述文件。
-
-解除关联只关闭自动选服，两份安装仍在虚拟盘内，仍需挂载；不会将游戏导出或删除虚拟盘。</value>
+ReFS、虚拟磁盘、反作弊及游戏更新器之间存在兼容性风险，可能产生无法预见的错误。真实游戏启动和反作弊兼容性尚未经验证。请备份存档、截图及重要文件，仅通过胡桃管理和启动，勿移动已挂载虚拟盘或交给其他启动器更新。确认了解这些风险后继续。</value>
   </data>
   <data name="GameCoexistenceSecondConfirmationTitle" xml:space="preserve">
     <value>二次确认：我理解并接受上述风险</value>
@@ -6263,7 +6261,7 @@
     <value>ReFS 写时复制已隔离两服写入，无需复制资源即可解除自动选服关联。两份安装仍留在虚拟磁盘中，仍需挂载才能使用，不会导出为普通目录或删除 VHDX。旧版硬链接记录仍需先复制恢复独立资源，可能需要大量空间。请关闭游戏及其他修改游戏的程序。是否继续？</value>
   </data>
   <data name="GameCoexistenceInstallationInvalid" xml:space="preserve">
-    <value>需要版本文件正常、已更新到当前正式版本的官服默认或国际服默认客户端，且两服在线清单版本必须一致。请先在胡桃内更新并校验修复；不支持 bilibili 或其他渠道。</value>
+    <value>需要配置和版本文件正常、包含完整资源目录且属于启动页面支持区服／渠道的客户端。转换要求源安装及目标在线清单均为相同的当前正式版本，请先更新并校验。</value>
   </data>
   <data name="GameCoexistenceOperationBusy" xml:space="preserve">
     <value>游戏路径正在被启动或资源操作使用，请结束相关操作后重试。</value>
@@ -6308,5 +6306,23 @@
   </data>
   <data name="GameCoexistenceMountButton" xml:space="preserve">
     <value>挂载并选择虚拟盘</value>
+  </data>
+  <data name="GameCoexistenceToggleHeader" xml:space="preserve">
+    <value>虚拟磁盘多服共存</value>
+  </data>
+  <data name="GameCoexistenceSelectVersionButton" xml:space="preserve">
+    <value>选择此版本</value>
+  </data>
+  <data name="GameCoexistenceScanButton" xml:space="preserve">
+    <value>扫描优化比率</value>
+  </data>
+  <data name="GameCoexistenceOptimizeButton" xml:space="preserve">
+    <value>空间优化（块克隆）</value>
+  </data>
+  <data name="GameCoexistenceInlineWarning" xml:space="preserve">
+    <value>每次转换保留独立版本；需要 Windows 支持 ReFS 和管理员权限。可能与反作弊、更新器不兼容并产生无法预见的错误，请仅通过胡桃启动和管理。</value>
+  </data>
+  <data name="GameCoexistenceScanHint" xml:space="preserve">
+    <value>扫描需读取大文件，可能耗时较长；优化仅共享完全相同的数据块，写入相互隔离，不会自动压缩宿主 VHDX。</value>
   </data>
 </root>

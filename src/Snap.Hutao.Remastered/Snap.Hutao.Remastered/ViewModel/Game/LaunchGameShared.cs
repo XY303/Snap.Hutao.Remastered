@@ -136,7 +136,15 @@ public sealed partial class LaunchGameShared
                 if (launchScheme is not null)
                 {
                     string? executable = launchOptions.GamePathEntry.Value?.Path;
-                    if (executable is not null && GameServerCoexistenceStorage.ReadState(GameServerCoexistenceStorage.GetRoot(executable)) is not null)
+                    if (launchOptions.CoexistenceEnabled.Value && executable is not null)
+                    {
+                        using BlockDeferral<Snap.Hutao.Remastered.Service.Game.Package.PackageConvertStatus> deferral = await viewModel.CreateConvertBlockDeferralAsync().ConfigureAwait(false);
+                        IProgress<string> progress = new Progress<string>(value => deferral.Progress.Report(new(value)));
+                        string selected = await serviceProvider.GetRequiredService<GameServerCoexistenceService>().SelectOrConvertAsync(executable, launchScheme, false, progress, CancellationToken.None).ConfigureAwait(false);
+                        await taskContext.SwitchToMainThreadAsync();
+                        launchOptions.PerformGamePathEntrySynchronization(selected);
+                    }
+                    else if (executable is not null && GameServerCoexistenceStorage.ReadState(GameServerCoexistenceStorage.GetRoot(executable)) is not null)
                     {
                         if (launchScheme.Channel is not ChannelType.Official || launchScheme.SubChannel is not SubChannelType.Default)
                         {
@@ -232,6 +240,15 @@ public sealed partial class LaunchGameShared
         ConvertOnlyLaunchExecutionInvoker invoker = new();
         try
         {
+            if (launchOptions.CoexistenceEnabled.Value && viewModel.TargetScheme is { } scheme && launchOptions.GamePathEntry.Value?.Path is { } executable)
+            {
+                using BlockDeferral<Snap.Hutao.Remastered.Service.Game.Package.PackageConvertStatus> deferral = await viewModel.CreateConvertBlockDeferralAsync().ConfigureAwait(false);
+                IProgress<string> progress = new Progress<string>(value => deferral.Progress.Report(new(value)));
+                string selected = await serviceProvider.GetRequiredService<GameServerCoexistenceService>().SelectOrConvertAsync(executable, scheme, true, progress, CancellationToken.None).ConfigureAwait(false);
+                await taskContext.SwitchToMainThreadAsync();
+                launchOptions.PerformGamePathEntrySynchronization(selected);
+                return;
+            }
             using (IServiceScope scope = serviceProvider.CreateScope())
             {
                 LaunchExecutionInvocationContext context = new()

@@ -3,9 +3,11 @@
 
 using Microsoft.UI.Xaml.Controls;
 using Snap.Hutao.Remastered.Factory.ContentDialog;
+using Snap.Hutao.Remastered.Service.Game;
+using Snap.Hutao.Remastered.Service.Game.FileSystem;
 using Snap.Hutao.Remastered.Service.Game.Coexistence;
 using Snap.Hutao.Remastered.Service.Notification;
-using Snap.Hutao.Remastered.Service.Game.FileSystem;
+using System.IO;
 
 namespace Snap.Hutao.Remastered.ViewModel.Game;
 
@@ -14,184 +16,124 @@ public sealed partial class LaunchGameViewModel
     private CancellationTokenSource? coexistenceCancellation;
 
     public bool IsCoexistenceBusy { get; private set => SetProperty(ref field, value); }
-
     public string CoexistenceStatus { get; private set => SetProperty(ref field, value); } = string.Empty;
+    public string CoexistenceSpace { get; private set => SetProperty(ref field, value); } = "占用：未读取；估算优化比率：待扫描";
+    public IReadOnlyList<GameVersionEntry> CoexistenceVersions { get; private set => SetProperty(ref field, value); } = [];
+    public GameVersionEntry? SelectedCoexistenceVersion { get; set => SetProperty(ref field, value); }
 
     internal async ValueTask RefreshCoexistenceStatusAsync()
     {
-        if (IsCoexistenceBusy)
-        {
-            return;
-        }
-
-        string status = SH.GameCoexistenceNotAssociated;
+        if (IsCoexistenceBusy) { return; }
         try
         {
-            string? executable = LaunchOptions.GamePathEntry.Value?.Path;
-            if (executable is not null)
+            await taskContext.SwitchToBackgroundAsync();
+            GameVirtualDiskInfo? disk = string.IsNullOrEmpty(LaunchOptions.CoexistenceContainer.Value) ? null : GameCoexistenceVirtualDisk.ReadDescriptor(LaunchOptions.CoexistenceContainer.Value);
+            if (disk is null)
             {
-                await taskContext.SwitchToBackgroundAsync();
-                await GameCoexistenceVirtualDisk.EnsureMountedAsync(executable).ConfigureAwait(false);
-                if (GameServerCoexistenceStorage.ReadState(GameServerCoexistenceStorage.GetRoot(executable)) is { } state)
-                {
-                    status = state.CreationPending ? SH.GameCoexistenceCreationPending : SH.FormatGameCoexistenceAssociated(state.ChineseExecutable, state.OverseaExecutable);
-                }
+                await taskContext.SwitchToMainThreadAsync();
+                CoexistenceStatus = "共存已关闭；开启时请选择虚拟磁盘存放位置。";
+                return;
             }
+
+            GameVersionLibrary library = GameVersionLibrary.Read(disk);
+            string usage = $"VHDX 宿主占用：{GameRefsBlockClone.GetFileAllocatedBytes(disk.ImagePath) / (1024D * 1024 * 1024):F2} GiB；估算优化比率：待扫描";
+            await taskContext.SwitchToMainThreadAsync();
+            CoexistenceVersions = library.Entries.Where(e => !e.Pending).ToList();
+            SelectedCoexistenceVersion = CoexistenceVersions.FirstOrDefault(e => e.GetExecutable(disk).Equals(LaunchOptions.GamePathEntry.Value?.Path, StringComparison.OrdinalIgnoreCase));
+            CoexistenceStatus = $"{(LaunchOptions.CoexistenceEnabled.Value ? "已开启" : "已关闭（保留虚拟盘）")}：{disk.ImagePath}；共 {library.Entries.Count} 个版本";
+            CoexistenceSpace = usage;
         }
         catch (Exception ex)
         {
-            status = SH.GameCoexistenceFailed;
-            messenger.Send(InfoBarMessage.Error(status, ex.Message));
+            messenger.Send(InfoBarMessage.Error(SH.GameCoexistenceFailed, ex.Message));
         }
+    }
 
-        await taskContext.SwitchToMainThreadAsync();
-        if (!IsCoexistenceBusy)
+    public async Task SetCoexistenceEnabledAsync(bool enabled)
+    {
+        if (IsCoexistenceBusy || LaunchOptions.CoexistenceEnabled.Value == enabled) { return; }
+        await RunLibraryOperationAsync(async (progress, token) =>
         {
-            CoexistenceStatus = status;
-        }
+            GameServerCoexistenceService service = serviceProvider.GetRequiredService<GameServerCoexistenceService>();
+            if (!enabled)
+            {
+                string original = await service.GetOriginalForDisableAsync(token).ConfigureAwait(false);
+                await taskContext.SwitchToMainThreadAsync();
+                LaunchOptions.PerformGamePathEntrySynchronization(original);
+                LaunchOptions.CoexistenceEnabled.Value = false;
+                return;
+            }
+
+            string executable = LaunchOptions.GamePathEntry.Value?.Path ?? throw new IOException(SH.ViewModelLaunchGameGamePathNullOrEmpty);
+            IContentDialogFactory dialogs = serviceProvider.GetRequiredService<IContentDialogFactory>();
+            if (await dialogs.CreateForConfirmCancelAsync(SH.GameCoexistenceRiskTitle, SH.GameCoexistenceRiskDescription).ConfigureAwait(false) != ContentDialogResult.Primary) { return; }
+            await taskContext.SwitchToMainThreadAsync();
+            if (!fileSystemPickerInteraction.PickFolder("选择虚拟硬盘存放位置（将在其中创建独立目录）").TryGetValue(out string? folder)) { return; }
+            string saved = LaunchOptions.CoexistenceContainer.Value;
+            bool reuse = !string.IsNullOrEmpty(saved) && Path.GetFullPath(folder!).Equals(Path.GetDirectoryName(saved), StringComparison.OrdinalIgnoreCase) && File.Exists(Path.Combine(saved, "installations.json"));
+            string container = reuse ? saved : Path.Combine(folder!, "HutaoGame-" + Guid.NewGuid().ToString("N")[..8] + ".hutao-vdisk");
+            if (await dialogs.CreateForConfirmCancelAsync(SH.GameCoexistenceSecondConfirmationTitle,
+                $"源安装：{executable}\n虚拟磁盘：{container}\n{(reuse ? "将复用已有版本库" : "将完整导入当前安装")}；以后每次转换增加独立版本。需要管理员权限及足够宿主空间。ReFS、更新器与反作弊兼容性未经保证，可能产生无法预见的错误。确认继续？").ConfigureAwait(false) != ContentDialogResult.Primary) { return; }
+            string selected = reuse
+                ? await service.ReopenLibraryAsync(container, token).ConfigureAwait(false)
+                : await service.EnableLibraryAsync(executable, container, progress, token).ConfigureAwait(false);
+            await taskContext.SwitchToMainThreadAsync();
+            LaunchOptions.CoexistenceContainer.Value = container;
+            LaunchOptions.PerformGamePathEntrySynchronization(selected);
+            LaunchOptions.CoexistenceEnabled.Value = true;
+            CoexistenceSpace = "初次导入完成；占用和估算优化比率可通过扫描刷新。";
+        });
     }
 
-    [Command("CreateCoexistingServerCommand")]
-    private Task CreateCoexistingServerAsync()
-    {
-        return RunCoexistenceOperationAsync(create: true);
-    }
+    [Command("ScanCoexistenceSpaceCommand")]
+    private Task ScanCoexistenceSpaceAsync() => RunSpaceOperationAsync(false);
 
-    [Command("UnpairGameServersCommand")]
-    private Task UnpairGameServersAsync()
+    [Command("OptimizeCoexistenceSpaceCommand")]
+    private Task OptimizeCoexistenceSpaceAsync() => RunSpaceOperationAsync(true);
+
+    private Task RunSpaceOperationAsync(bool optimize) => RunLibraryOperationAsync(async (progress, token) =>
     {
-        return RunCoexistenceOperationAsync(create: false);
-    }
+        GameSpaceScan scan = await serviceProvider.GetRequiredService<GameServerCoexistenceService>().ScanSpaceAsync(optimize, progress, token).ConfigureAwait(false);
+        await taskContext.SwitchToMainThreadAsync();
+        CoexistenceSpace = scan.Description;
+    });
+
+    [Command("SelectCoexistenceVersionCommand")]
+    private Task SelectCoexistenceVersionAsync() => RunLibraryOperationAsync(async (progress, token) =>
+    {
+        if (!LaunchOptions.CoexistenceEnabled.Value || SelectedCoexistenceVersion is not { } entry) { return; }
+        if (await GameLifeCycle.IsGameRunningAsync(taskContext).ConfigureAwait(false)) { throw new IOException(SH.ServiceGameLaunchExecutionGameIsRunning); }
+        GameVirtualDiskInfo disk = GameCoexistenceVirtualDisk.ReadDescriptor(LaunchOptions.CoexistenceContainer.Value) ?? throw new IOException("找不到虚拟磁盘。");
+        await GameCoexistenceVirtualDisk.EnsureMountedAsync(disk, token).ConfigureAwait(false);
+        string selected = entry.GetExecutable(disk);
+        GameServerCoexistenceService.InspectInstallation(selected);
+        await taskContext.SwitchToMainThreadAsync();
+        LaunchOptions.PerformGamePathEntrySynchronization(selected);
+    });
 
     [Command("CancelCoexistenceCommand")]
     private void CancelCoexistence()
     {
-        try
-        {
-            coexistenceCancellation?.Cancel();
-        }
-        catch (ObjectDisposedException)
-        {
-            // Completion may have disposed the operation before the UI processes this click.
-        }
+        try { coexistenceCancellation?.Cancel(); }
+        catch (ObjectDisposedException) { }
     }
 
-    [Command("MountCoexistenceDiskCommand")]
-    private async Task MountCoexistenceDiskAsync()
-    {
-        if (IsCoexistenceBusy || LaunchOptions.GamePathEntry.Value?.Path is not { } executable)
-        {
-            return;
-        }
-
-        IsCoexistenceBusy = true;
-        try
-        {
-            await taskContext.SwitchToBackgroundAsync();
-            GameVirtualDiskInfo disk = GameCoexistenceVirtualDisk.Find(executable)
-                ?? GameCoexistenceVirtualDisk.ReadDescriptor(GameCoexistenceVirtualDisk.GetContainer(executable))
-                ?? throw new System.IO.IOException("没有找到当前安装对应的虚拟磁盘描述文件。请先创建虚拟磁盘共存。");
-            await GameCoexistenceVirtualDisk.EnsureMountedAsync(disk, CancellationToken).ConfigureAwait(false);
-            string selected = System.IO.Path.GetFileName(executable).Equals("GenshinImpact.exe", StringComparison.OrdinalIgnoreCase)
-                ? disk.OverseaExecutable : disk.ChineseExecutable;
-            await taskContext.SwitchToMainThreadAsync();
-            LaunchOptions.PerformGamePathEntrySynchronization(selected);
-        }
-        catch (Exception ex)
-        {
-            messenger.Send(InfoBarMessage.Error(SH.GameCoexistenceFailed, ex.Message));
-        }
-        finally
-        {
-            await taskContext.SwitchToMainThreadAsync();
-            IsCoexistenceBusy = false;
-        }
-
-        await RefreshCoexistenceStatusAsync();
-    }
-
-    private async Task RunCoexistenceOperationAsync(bool create)
+    private async Task RunLibraryOperationAsync(Func<IProgress<string>, CancellationToken, Task> operation)
     {
         await taskContext.SwitchToMainThreadAsync();
-        if (IsCoexistenceBusy)
-        {
-            return;
-        }
-
+        if (IsCoexistenceBusy) { return; }
         IsCoexistenceBusy = true;
-        CoexistenceStatus = string.Empty;
+        using CancellationTokenSource cancellation = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken);
+        coexistenceCancellation = cancellation;
         try
         {
-            string? executable = LaunchOptions.GamePathEntry.Value?.Path;
-            if (string.IsNullOrEmpty(executable))
-            {
-                messenger.Send(InfoBarMessage.Warning(SH.ViewModelLaunchGameGamePathNullOrEmpty));
-                return;
-            }
-
-            IContentDialogFactory dialogs = serviceProvider.GetRequiredService<IContentDialogFactory>();
-            GameServerCoexistenceService coexistence = serviceProvider.GetRequiredService<GameServerCoexistenceService>();
-            if (create)
-            {
-                await taskContext.SwitchToBackgroundAsync();
-                GameVirtualDiskInfo layout = GameCoexistenceVirtualDisk.GetLayout(executable);
-                string otherExecutable = System.IO.Path.GetFileName(executable).Equals("GenshinImpact.exe", StringComparison.OrdinalIgnoreCase) ? layout.ChineseExecutable : layout.OverseaExecutable;
-                GameServerCoexistenceService.InspectInstallation(executable);
-                if (await dialogs.CreateForConfirmCancelAsync(SH.GameCoexistenceRiskTitle, SH.GameCoexistenceRiskDescription).ConfigureAwait(false) is not ContentDialogResult.Primary)
-                {
-                    return;
-                }
-
-                // A separate, default-cancel confirmation is required for every association.
-                if (await dialogs.CreateForConfirmCancelAsync(
-                    SH.GameCoexistenceSecondConfirmationTitle,
-                    SH.FormatGameCoexistenceSecondConfirmation(executable, otherExecutable)).ConfigureAwait(false) is not ContentDialogResult.Primary)
-                {
-                    return;
-                }
-            }
-            else if (await dialogs.CreateForConfirmCancelAsync(SH.GameCoexistenceUnpairTitle, SH.GameCoexistenceUnpairDescription).ConfigureAwait(false) is not ContentDialogResult.Primary)
-            {
-                return;
-            }
-
+            Progress<string> progress = new(value => CoexistenceStatus = SH.FormatGameCoexistenceProcessing(value));
+            await operation(progress, cancellation.Token).ConfigureAwait(false);
             await taskContext.SwitchToMainThreadAsync();
-            using CancellationTokenSource cancellation = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken);
-            coexistenceCancellation = cancellation;
-            Progress<string> progress = new(path => CoexistenceStatus = SH.FormatGameCoexistenceProcessing(path));
-            CoexistenceStatus = SH.GameCoexistencePreparing;
-            string completion;
-            if (create)
-            {
-                (int files, long bytes) = await coexistence.CreateAsync(executable, progress, cancellation.Token).ConfigureAwait(false);
-                GameVirtualDiskInfo layout = GameCoexistenceVirtualDisk.GetLayout(executable);
-                string virtualSource = System.IO.Path.GetFileName(executable).Equals("GenshinImpact.exe", StringComparison.OrdinalIgnoreCase) ? layout.OverseaExecutable : layout.ChineseExecutable;
-                await taskContext.SwitchToMainThreadAsync();
-                LaunchOptions.PerformGamePathEntrySynchronization(virtualSource);
-                completion = SH.FormatGameCoexistenceCompleted(files, (bytes / (1024D * 1024D * 1024D)).ToString("F2"));
-            }
-            else
-            {
-                await coexistence.UnpairAsync(executable, progress, cancellation.Token).ConfigureAwait(false);
-                completion = SH.GameCoexistenceUnpaired;
-            }
-
-            await taskContext.SwitchToMainThreadAsync();
-            CoexistenceStatus = completion;
-            messenger.Send(InfoBarMessage.Success(completion));
+            CoexistenceStatus = "操作完成。";
         }
-        catch (OperationCanceledException)
-        {
-            await taskContext.SwitchToMainThreadAsync();
-            CoexistenceStatus = SH.GameCoexistenceInterrupted;
-            messenger.Send(InfoBarMessage.Warning(CoexistenceStatus));
-        }
-        catch (Exception ex)
-        {
-            await taskContext.SwitchToMainThreadAsync();
-            CoexistenceStatus = SH.GameCoexistenceFailed;
-            messenger.Send(InfoBarMessage.Error(SH.GameCoexistenceFailed, ex.Message));
-        }
+        catch (OperationCanceledException) { messenger.Send(InfoBarMessage.Warning(SH.GameCoexistenceInterrupted)); }
+        catch (Exception ex) { messenger.Send(InfoBarMessage.Error(SH.GameCoexistenceFailed, ex.Message)); }
         finally
         {
             await taskContext.SwitchToMainThreadAsync();

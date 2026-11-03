@@ -26,6 +26,7 @@ public sealed record GameServerCoexistenceState
 
 [JsonSerializable(typeof(GameServerCoexistenceState))]
 [JsonSerializable(typeof(GameVirtualDiskInfo))]
+[JsonSerializable(typeof(GameVersionLibrary))]
 internal sealed partial class GameServerCoexistenceJsonContext : JsonSerializerContext
 {
 }

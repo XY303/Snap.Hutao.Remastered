@@ -185,6 +185,11 @@ public sealed partial class GamePackageService : IGamePackageService
                     {
                         try
                         {
+                            string executableName = operationContext.GameFileSystem.IsExecutableOversea ? "GenshinImpact.exe" : "YuanShen.exe";
+                            if (GameVersionLibrary.FindEntry(System.IO.Path.Combine(operationContext.EffectiveGameDirectory, executableName)) is { Pending: true })
+                            {
+                                throw new InvalidOperationException("版本创建未完成，请重新从完整安装转换。中断的版本不能启动或更新。");
+                            }
                             GameServerCoexistenceState? coexistence = GameServerCoexistenceStorage.ReadState(operationContext.EffectiveGameDirectory);
                             if (coexistence is { CreationPending: true }
                                 && (coexistence.Format == 1 || operationContext.Kind is not GamePackageOperationKind.Verify))

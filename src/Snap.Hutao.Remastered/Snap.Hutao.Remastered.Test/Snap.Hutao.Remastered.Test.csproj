@@ -14,6 +14,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="../Snap.Hutao.Remastered/Service/Game/Coexistence/GameVersionLibrary.cs" Link="Production/Coexistence/GameVersionLibrary.cs" />
+    <Compile Include="../Snap.Hutao.Remastered/Service/Game/Coexistence/GameSpaceOptimizer.cs" Link="Production/Coexistence/GameSpaceOptimizer.cs" />
     <Compile Include="../Snap.Hutao.Remastered/Service/Game/Coexistence/GameRefsBlockClone.cs" Link="Production/Coexistence/GameRefsBlockClone.cs" />
     <Compile Include="../Snap.Hutao.Remastered/Service/Game/Coexistence/GameCoexistenceVirtualDisk.cs" Link="Production/Coexistence/GameCoexistenceVirtualDisk.cs" />
     <Compile Include="../Snap.Hutao.Remastered/Service/Game/Coexistence/GameServerCoexistenceStorage.VirtualDisk.cs" Link="Production/Coexistence/GameServerCoexistenceStorage.VirtualDisk.cs" />

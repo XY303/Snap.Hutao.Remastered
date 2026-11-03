@@ -140,6 +140,7 @@ public sealed class GameVirtualDiskTest
             Assert.IsNotNull(GameCoexistenceVirtualDisk.Find(targetExecutable));
             Assert.IsTrue(File.Exists(sourceExecutable));
             Assert.IsTrue(File.Exists(targetExecutable));
+            await AssertVersionLibraryAsync(disk, original, sourceExecutable, sourceData, relative, content);
         }
         finally
         {
@@ -157,12 +158,93 @@ public sealed class GameVirtualDiskTest
                 // Only exact fixture paths, after detach; never recurse into a volume.
                 File.Delete(image);
                 File.Delete(Path.Combine(container, GameCoexistenceVirtualDisk.DescriptorName));
+                File.Delete(Path.Combine(container, "installations.json"));
                 Directory.Delete(mount);
                 Directory.Delete(container);
             }
 
             Directory.Delete(root, true);
         }
+    }
+
+    private static async Task AssertVersionLibraryAsync(GameVirtualDiskInfo disk, string original, string sourceExecutable, string data, string relative, byte[] content)
+    {
+        bool oversea = Path.GetFileName(sourceExecutable) == "GenshinImpact.exe";
+        List<GameVersionEntry> entries = [new(Guid.NewGuid(), oversea, 1, 0, "1.0.0", false), new(Guid.NewGuid(), oversea, 14, 0, "1.0.0", false), new(Guid.NewGuid(), oversea, 1, 1, "1.0.0", false)];
+        GameVersionLibrary library = new(original, entries);
+        library.Save(disk);
+        string first = entries[0].GetExecutable(disk);
+        string second = entries[1].GetExecutable(disk);
+        string third = entries[2].GetExecutable(disk);
+        await GameVersionLibrary.CopySnapshotAsync(sourceExecutable, first, null, CancellationToken.None);
+        await GameVersionLibrary.CopySnapshotAsync(first, second, null, CancellationToken.None);
+        await GameVersionLibrary.CopySnapshotAsync(second, third, null, CancellationToken.None);
+        Assert.AreEqual(3, GameVersionLibrary.Read(disk).Entries.Count);
+        Assert.AreEqual(14, GameVersionLibrary.FindEntry(second)!.Channel);
+        string firstFile = Path.Combine(Path.GetDirectoryName(first)!, data, relative);
+        string secondFile = Path.Combine(Path.GetDirectoryName(second)!, data, relative);
+        string thirdFile = Path.Combine(Path.GetDirectoryName(third)!, data, relative);
+        GameSpaceScan shared = await GameSpaceOptimizer.ScanAsync(disk, null, CancellationToken.None);
+        Assert.AreEqual(0L, shared.ReclaimableBytes);
+        File.Delete(thirdFile);
+        File.WriteAllBytes(thirdFile, content); // Ordinary independent allocation, not a block clone.
+        GameSpaceScan scan = await GameSpaceOptimizer.ScanAsync(disk, null, CancellationToken.None);
+        Assert.IsGreaterThan(1024L * 1024, scan.ReclaimableBytes, scan.Description + "\n" + JsonSerializer.Serialize(GameRefsBlockClone.GetExtents(firstFile)) + "\n" + JsonSerializer.Serialize(GameRefsBlockClone.GetExtents(thirdFile)) + "\n" + await RunAsync("fsutil.exe", ["file", "queryExtentsAndRefCounts", thirdFile]));
+        foreach (GameSpaceDuplicate duplicate in scan.Duplicates)
+        {
+            await GameRefsBlockClone.DeduplicateAsync(duplicate.Source, duplicate.Target, duplicate.Hash, CancellationToken.None);
+        }
+
+        GameSpaceScan optimized = await GameSpaceOptimizer.ScanAsync(disk, null, CancellationToken.None);
+        Assert.AreEqual(0L, optimized.ReclaimableBytes);
+        CollectionAssert.AreEqual(content, File.ReadAllBytes(thirdFile));
+        using (FileStream stream = File.OpenWrite(thirdFile)) { stream.WriteByte((byte)(content[0] ^ 255)); stream.Flush(true); }
+        CollectionAssert.AreEqual(content, File.ReadAllBytes(firstFile));
+        CollectionAssert.AreEqual(content, File.ReadAllBytes(secondFile));
+        byte[] changed = File.ReadAllBytes(thirdFile);
+        string hash = Convert.ToHexString(SHA256.HashData(content));
+        await Assert.ThrowsAsync<IOException>(() => GameRefsBlockClone.DeduplicateAsync(firstFile, thirdFile, hash, CancellationToken.None));
+        CollectionAssert.AreEqual(changed, File.ReadAllBytes(thirdFile));
+        using CancellationTokenSource canceled = new();
+        canceled.Cancel();
+        await Assert.ThrowsAsync<OperationCanceledException>(() => GameRefsBlockClone.DeduplicateAsync(firstFile, secondFile, hash, canceled.Token));
+        CollectionAssert.AreEqual(content, File.ReadAllBytes(secondFile));
+        library.Entries.Add(entries[0]);
+        library.Save(disk);
+        Assert.Throws<InvalidDataException>(() => GameVersionLibrary.Read(disk));
+        library.Entries.RemoveAt(library.Entries.Count - 1);
+        library.Save(disk);
+    }
+
+    [TestMethod]
+    public void SpaceEstimateCountsSharedExtentsOnlyOnce()
+    {
+        Assert.AreEqual(20L, GameSpaceOptimizer.UnionClusters([new(0, 10, 10), new(0, 10, 10), new(10, 25, 10)]));
+        Assert.AreEqual(15L, GameSpaceOptimizer.UnionClusters([new(0, 10, 10), new(0, 15, 10)]));
+        Assert.AreEqual(0L, GameSpaceOptimizer.UnionClusters([]));
+    }
+
+    [TestMethod]
+    public void VersionCatalogRejectsUnregisteredAndMissingManagedPaths()
+    {
+        string container = Path.Combine(Path.GetTempPath(), "hutao-catalog-" + Guid.NewGuid().ToString("N") + ".hutao-vdisk");
+        Directory.CreateDirectory(container);
+        GameVirtualDiskInfo disk = new(container, "\\\\?\\Volume{" + Guid.NewGuid() + "}\\");
+        try
+        {
+            File.WriteAllText(Path.Combine(container, GameCoexistenceVirtualDisk.DescriptorName), JsonSerializer.Serialize(disk));
+            GameVersionEntry entry = new(Guid.NewGuid(), false, 14, 0, "1.0.0", true);
+            string executable = entry.GetExecutable(disk);
+            Assert.Throws<InvalidDataException>(() => GameVersionLibrary.FindEntry(executable));
+            GameVersionLibrary library = new(Path.Combine(container, "original", "YuanShen.exe"), [entry]);
+            library.Save(disk);
+            Assert.IsTrue(GameVersionLibrary.FindEntry(executable)!.Pending);
+            Assert.Throws<InvalidDataException>(() => GameVersionLibrary.FindEntry((entry with { Id = Guid.NewGuid() }).GetExecutable(disk)));
+            library = library with { OriginalExecutable = "YuanShen.exe" };
+            library.Save(disk);
+            Assert.Throws<InvalidDataException>(() => GameVersionLibrary.Read(disk));
+        }
+        finally { Directory.Delete(container, true); }
     }
 
     private static string Quote(string value) => "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'";
