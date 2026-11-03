@@ -299,6 +299,34 @@ public sealed class GameCoexistenceManifestTest
     }
 
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task ForcedRepairToleratesMissingResourceDirectories(bool removeSource)
+    {
+        const string name = "GenshinImpact_Data/StreamingAssets/blocks/01/a.blk";
+        GameCoexistenceAsset executable = Asset("GenshinImpact.exe", "cache/exe", "exe");
+        GameCoexistenceAsset shared = Asset(name, "Game/YuanShen_Data/StreamingAssets/blocks/01/a.blk", "original");
+        await GameServerCoexistenceStorage.CreateFromManifestAsync(sourceExecutable, targetExecutable, [executable, shared], () => Task.CompletedTask);
+        string missing = removeSource ? shared.SourcePath : Target(name);
+        Directory.Delete(Path.GetDirectoryName(missing)!, true);
+
+        await GameServerCoexistenceStorage.UnlinkForRepairAsync(GameServerCoexistenceStorage.GetRoot(targetExecutable));
+
+        if (removeSource)
+        {
+            Assert.AreEqual("original", File.ReadAllText(Target(name)));
+        }
+        else
+        {
+            Assert.IsFalse(File.Exists(Target(name)));
+            Assert.AreEqual("original", File.ReadAllText(shared.SourcePath));
+        }
+
+        Assert.IsNull(GameServerCoexistenceStorage.ReadState(GameServerCoexistenceStorage.GetRoot(sourceExecutable)));
+        Assert.IsNull(GameServerCoexistenceStorage.ReadState(GameServerCoexistenceStorage.GetRoot(targetExecutable)));
+    }
+
+    [TestMethod]
     public async Task ForcedRepairPausePreventsUnlinkingUntilResumed()
     {
         GameCoexistenceAsset executable = Asset("GenshinImpact.exe", "cache/exe", "exe");

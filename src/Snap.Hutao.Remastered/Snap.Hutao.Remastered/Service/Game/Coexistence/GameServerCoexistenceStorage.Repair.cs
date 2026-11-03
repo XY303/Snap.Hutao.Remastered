@@ -80,7 +80,15 @@ public static partial class GameServerCoexistenceStorage
                     {
                         string temporary = asset + suffix + state.PairId.ToString("N");
                         EnsureOrdinaryPath(temporary);
-                        File.Delete(temporary);
+                        try
+                        {
+                            File.Delete(temporary);
+                        }
+                        catch (DirectoryNotFoundException)
+                        {
+                            // Interrupted creation/repair may never have created this
+                            // directory, or may already have removed it. Nothing to clean.
+                        }
                     }
                 }
             }
