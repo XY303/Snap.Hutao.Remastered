@@ -228,7 +228,8 @@ public sealed partial class GamePackageViewModel : Abstraction.ViewModel
             return;
         }
 
-        if (!Enum.TryParse(operation, out GamePackageOperationKind operationKind))
+        bool forceRepair = operation is "ForceRepair";
+        if (!Enum.TryParse(forceRepair ? nameof(GamePackageOperationKind.Verify) : operation, out GamePackageOperationKind operationKind))
         {
             return;
         }
@@ -256,7 +257,11 @@ public sealed partial class GamePackageViewModel : Abstraction.ViewModel
             }
 
             Version? manifestVersion = installation.InstalledVersion;
-            if (manifestVersion is null && operationKind is GamePackageOperationKind.Verify)
+            if (forceRepair)
+            {
+                Version.TryParse(branch.Main.Tag, out manifestVersion);
+            }
+            else if (manifestVersion is null && operationKind is GamePackageOperationKind.Verify)
             {
                 BranchWrapper repairTarget = LocalSetting.Get(SettingKeys.TreatPredownloadAsMain, false) ? branch.PreDownload ?? branch.Main : branch.Main;
                 Version.TryParse(repairTarget.Tag, out manifestVersion);
@@ -266,13 +271,15 @@ public sealed partial class GamePackageViewModel : Abstraction.ViewModel
                 messenger.Send(InfoBarMessage.Warning(installation.HasVersionConflict ? SH.ViewModelGameInstallationConflict : SH.ViewModelGameInstallationInvalid));
                 return;
             }
-            SophonDecodedBuilds? builds = await GetSophonDecodedBuildsAsync(operationKind, branch, gameFileSystem, manifestVersion).ConfigureAwait(false);
+            SophonDecodedBuilds? builds = await GetSophonDecodedBuildsAsync(operationKind, branch, gameFileSystem, manifestVersion, forceRepair).ConfigureAwait(false);
             if (builds is null) { return; }
             GameChannelSDK? sdk = await GetCurrentGameChannelSDKAsync(currentScheme).ConfigureAwait(false);
             PredownloadProgressTracker? tracker = operationKind is GamePackageOperationKind.Predownload ? new() : null;
             GamePackageOperationContext context = new(serviceProvider, operationKind, gameFileSystem)
             {
                 InstallationAtPreparation = installation,
+                DisableCoexistenceForRepair = forceRepair,
+                CoexistenceDisabled = forceRepair ? () => serviceProvider.GetRequiredService<LaunchGameViewModel>().RefreshCoexistenceStatusAsync().SafeForget() : null,
                 LocalBuild = builds.LocalBuild,
                 RemoteBuild = builds?.RemoteBuild,
                 PatchBuild = builds?.PatchBuild,
@@ -292,7 +299,7 @@ public sealed partial class GamePackageViewModel : Abstraction.ViewModel
                 {
                     return;
                 }
-                if (operationKind is GamePackageOperationKind.Verify && installation.HasVersionProblem)
+                if (operationKind is GamePackageOperationKind.Verify && (installation.HasVersionProblem || forceRepair))
                 {
                     // The chosen manifest has now been fully checked/repaired.
                     GameInstallationMetadataRepair.Commit(gameFileSystem.GameConfigurationFilePath, gameFileSystem.ScriptVersionFilePath, manifestVersion);
@@ -385,7 +392,7 @@ public sealed partial class GamePackageViewModel : Abstraction.ViewModel
         OnPropertyChanged(nameof(PredownloadProgressText));
     }
 
-    private async ValueTask<SophonDecodedBuilds?> GetSophonDecodedBuildsAsync(GamePackageOperationKind operationKind, GameBranch branch, IGameFileSystem gameFileSystem, Version manifestVersion)
+    private async ValueTask<SophonDecodedBuilds?> GetSophonDecodedBuildsAsync(GamePackageOperationKind operationKind, GameBranch branch, IGameFileSystem gameFileSystem, Version manifestVersion, bool forceRepair = false)
     {
 
         SophonDecodedBuild? localBuild;
@@ -399,7 +406,7 @@ public sealed partial class GamePackageViewModel : Abstraction.ViewModel
         {
             try
             {
-                BranchWrapper localBranch = operationKind is GamePackageOperationKind.Verify && LocalSetting.Get(SettingKeys.TreatPredownloadAsMain, false)
+                BranchWrapper localBranch = !forceRepair && operationKind is GamePackageOperationKind.Verify && LocalSetting.Get(SettingKeys.TreatPredownloadAsMain, false)
                     ? branch.PreDownload?.GetTaggedCopy(manifestVersion.ToString()) ?? branch.Main.GetTaggedCopy(manifestVersion.ToString())
                     : branch.Main.GetTaggedCopy(manifestVersion.ToString());
                 localBuild = await gamePackageService.DecodeManifestsAsync(gameFileSystem, localBranch).ConfigureAwait(false);

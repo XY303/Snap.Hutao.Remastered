@@ -16,7 +16,7 @@ public sealed partial class LaunchGameViewModel
 
     public string CoexistenceStatus { get; private set => SetProperty(ref field, value); } = string.Empty;
 
-    private async ValueTask RefreshCoexistenceStatusAsync()
+    internal async ValueTask RefreshCoexistenceStatusAsync()
     {
         if (IsCoexistenceBusy)
         {

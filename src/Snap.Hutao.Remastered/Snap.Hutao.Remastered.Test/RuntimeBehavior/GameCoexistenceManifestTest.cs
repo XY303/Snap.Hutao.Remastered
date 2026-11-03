@@ -217,6 +217,109 @@ public sealed class GameCoexistenceManifestTest
         Assert.IsFalse(File.Exists(Path.Combine(workspace, "escape.dll")));
     }
 
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task ForcedRepairUnlinksCurrentResourcesWithoutCopyingOrChangingPeer(bool repairSource)
+    {
+        const string name = "GenshinImpact_Data/StreamingAssets/a.blk";
+        GameCoexistenceAsset executable = Asset("GenshinImpact.exe", "cache/exe", "exe");
+        GameCoexistenceAsset shared = Asset(name, "Game/YuanShen_Data/StreamingAssets/a.blk", "original");
+        GameCoexistenceAsset privateFile = Asset("UnityPlayer.dll", "Game/UnityPlayer.dll", "private");
+        await GameServerCoexistenceStorage.CreateFromManifestAsync(sourceExecutable, targetExecutable, [executable, shared, privateFile], () => Task.CompletedTask);
+        string root = GameServerCoexistenceStorage.GetRoot(repairSource ? sourceExecutable : targetExecutable);
+        string selected = repairSource ? shared.SourcePath : Target(name);
+        string peer = repairSource ? Target(name) : shared.SourcePath;
+        Assert.AreEqual(shared.Size, GameServerCoexistenceStorage.GetRequiredUnlinkRepairBytes(root));
+        await GameServerCoexistenceStorage.UnlinkForRepairAsync(root);
+
+        Assert.IsFalse(File.Exists(selected));
+        Assert.AreEqual("original", File.ReadAllText(peer));
+        Assert.AreEqual(1U, GameServerCoexistenceStorage.GetLinkCount(peer));
+        Assert.AreEqual("private", File.ReadAllText(Path.Combine(root, privateFile.Name)));
+        Assert.IsTrue(File.Exists(repairSource ? sourceExecutable : targetExecutable));
+        Assert.IsNull(GameServerCoexistenceStorage.ReadState(root));
+        Assert.IsNull(GameServerCoexistenceStorage.ReadState(GameServerCoexistenceStorage.GetRoot(sourceExecutable)));
+        Assert.IsFalse(Directory.EnumerateFiles(workspace, "*.hutao-private-*", SearchOption.AllDirectories).Any());
+
+        // A later repair writes an independent replacement without touching the peer.
+        File.WriteAllText(selected, "repaired");
+        Assert.AreEqual("original", File.ReadAllText(peer));
+        Assert.AreEqual(1U, GameServerCoexistenceStorage.GetLinkCount(selected));
+    }
+
+    [TestMethod]
+    public async Task InterruptedForcedRepairBlocksLaunchAndCanResumeUnlinking()
+    {
+        GameCoexistenceAsset executable = Asset("GenshinImpact.exe", "cache/exe", "exe");
+        GameCoexistenceAsset first = Asset("GenshinImpact_Data/StreamingAssets/a.blk", "Game/YuanShen_Data/StreamingAssets/a.blk", "first");
+        GameCoexistenceAsset last = Asset("GenshinImpact_Data/StreamingAssets/b.blk", "Game/YuanShen_Data/StreamingAssets/b.blk", "last");
+        await GameServerCoexistenceStorage.CreateFromManifestAsync(sourceExecutable, targetExecutable, [executable, first, last], () => Task.CompletedTask);
+        using CancellationTokenSource cancellation = new();
+        InlineProgress progress = new(path => { if (path.EndsWith("b.blk", StringComparison.Ordinal)) { cancellation.Cancel(); } });
+        string root = GameServerCoexistenceStorage.GetRoot(targetExecutable);
+        await Assert.ThrowsAsync<OperationCanceledException>(() => GameServerCoexistenceStorage.UnlinkForRepairAsync(root, progress, cancellation.Token));
+        Assert.IsFalse(File.Exists(Target(first.Name)));
+        Assert.IsTrue(File.Exists(Target(last.Name)));
+        Assert.IsTrue(GameServerCoexistenceStorage.ReadState(root)!.CreationPending);
+        Assert.Throws<InvalidDataException>(() => GameServerCoexistenceStorage.GetCounterpart(sourceExecutable, true));
+        await GameServerCoexistenceStorage.UnlinkForRepairAsync(root);
+        Assert.IsFalse(File.Exists(Target(last.Name)));
+        Assert.IsNull(GameServerCoexistenceStorage.ReadState(root));
+        Assert.AreEqual("first", File.ReadAllText(first.SourcePath));
+        Assert.AreEqual("last", File.ReadAllText(last.SourcePath));
+    }
+
+    [TestMethod]
+    public async Task ForcedRepairKeepsAlreadyIndependentResources()
+    {
+        GameCoexistenceAsset executable = Asset("GenshinImpact.exe", "cache/exe", "exe");
+        GameCoexistenceAsset shared = Asset("GenshinImpact_Data/StreamingAssets/a.blk", "Game/YuanShen_Data/StreamingAssets/a.blk", "independent");
+        await GameServerCoexistenceStorage.CreateFromManifestAsync(sourceExecutable, targetExecutable, [executable, shared], () => Task.CompletedTask);
+        string root = GameServerCoexistenceStorage.GetRoot(targetExecutable);
+        await GameServerCoexistenceStorage.DetachAsync(root);
+        Assert.AreEqual(0L, GameServerCoexistenceStorage.GetRequiredUnlinkRepairBytes(root));
+        await GameServerCoexistenceStorage.UnlinkForRepairAsync(root);
+        Assert.AreEqual("independent", File.ReadAllText(Target(shared.Name)));
+        Assert.IsNull(GameServerCoexistenceStorage.ReadState(root));
+    }
+
+    [TestMethod]
+    public async Task ForcedRepairCanRecoverIncompleteCreationAndMissingPeerRecord()
+    {
+        GameCoexistenceAsset executable = Asset("GenshinImpact.exe", "cache/exe", "exe");
+        GameCoexistenceAsset shared = Asset("GenshinImpact_Data/StreamingAssets/a.blk", "Game/YuanShen_Data/StreamingAssets/a.blk", "original");
+        await Assert.ThrowsAsync<IOException>(() => GameServerCoexistenceStorage.CreateFromManifestAsync(sourceExecutable, targetExecutable, [executable, shared], () => throw new IOException("interrupted")));
+        File.Delete(Path.Combine(GameServerCoexistenceStorage.GetRoot(sourceExecutable), GameServerCoexistenceStorage.StateFileName));
+        string root = GameServerCoexistenceStorage.GetRoot(targetExecutable);
+        await GameServerCoexistenceStorage.UnlinkForRepairAsync(root);
+        Assert.IsFalse(File.Exists(Target(shared.Name)));
+        Assert.AreEqual("original", File.ReadAllText(shared.SourcePath));
+        Assert.IsNull(GameServerCoexistenceStorage.ReadState(root));
+    }
+
+    [TestMethod]
+    public async Task ForcedRepairPausePreventsUnlinkingUntilResumed()
+    {
+        GameCoexistenceAsset executable = Asset("GenshinImpact.exe", "cache/exe", "exe");
+        GameCoexistenceAsset shared = Asset("GenshinImpact_Data/StreamingAssets/a.blk", "Game/YuanShen_Data/StreamingAssets/a.blk", "original");
+        await GameServerCoexistenceStorage.CreateFromManifestAsync(sourceExecutable, targetExecutable, [executable, shared], () => Task.CompletedTask);
+        TaskCompletionSource paused = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource resume = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        Task operation = GameServerCoexistenceStorage.UnlinkForRepairAsync(GameServerCoexistenceStorage.GetRoot(targetExecutable), waitForResume: () =>
+        {
+            paused.TrySetResult();
+            return resume.Task;
+        });
+        await paused.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.IsTrue(File.Exists(Target(shared.Name)));
+        Assert.IsFalse(operation.IsCompleted);
+        resume.SetResult();
+        await operation;
+        Assert.IsFalse(File.Exists(Target(shared.Name)));
+        Assert.AreEqual("original", File.ReadAllText(shared.SourcePath));
+    }
+
     private GameCoexistenceAsset Asset(string name, string source, string content)
     {
         string path = Path.Combine(workspace, source);

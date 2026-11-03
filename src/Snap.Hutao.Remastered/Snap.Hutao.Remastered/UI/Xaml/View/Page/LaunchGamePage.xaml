@@ -451,6 +451,12 @@
                                                     Style="{StaticResource DefaultAppBarButtonStyle}"/>
                                                 <AppBarButton
                                                     Command="{x:Bind ((shvg:LaunchGameViewModel)DataContext).GamePackageViewModel.StartCommand, Mode=OneWay}"
+                                                    CommandParameter="ForceRepair"
+                                                    Icon="{shuxm:FontIcon Glyph={StaticResource FontIconContentDeveloperTools}}"
+                                                    IsEnabled="{x:Bind ((shvg:LaunchGameViewModel)DataContext).GamePackageViewModel.CanOperate, Mode=OneWay}"
+                                                    Label="{shuxm:ResourceString Name=GameCoexistenceForceRepairButton}"/>
+                                                <AppBarButton
+                                                    Command="{x:Bind ((shvg:LaunchGameViewModel)DataContext).GamePackageViewModel.StartCommand, Mode=OneWay}"
                                                     CommandParameter="Update"
                                                     Icon="{shuxm:FontIcon Glyph={StaticResource FontIconContentUpArrowShiftKey}}"
                                                     IsEnabled="{x:Bind ((shvg:LaunchGameViewModel)DataContext).GamePackageViewModel.IsUpdateAvailable, Mode=OneWay}"

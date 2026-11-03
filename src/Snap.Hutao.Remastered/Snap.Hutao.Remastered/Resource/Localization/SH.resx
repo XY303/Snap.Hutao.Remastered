@@ -6302,6 +6302,30 @@
     <value>已存在共存记录或目标目录。请先恢复独立并解除关联；如需重新创建，请自行移走已有生成目录。为防止覆盖游戏文件，程序不会复用非空目录。</value>
   </data>
   <data name="GameCoexistenceCreationPending" xml:space="preserve">
-    <value>共存创建尚未完成。请先恢复独立并解除关联，再移走未完成的生成目录后重试。当前禁止启动、更新和修复，以免使用不完整资源。</value>
+    <value>共存创建或恢复尚未完成，当前禁止启动和更新。可使用“强行修复”删除当前客户端的共享链接、关闭共存并完整修复，或先恢复独立并解除关联。</value>
+  </data>
+  <data name="GameCoexistenceForceRepairButton" xml:space="preserve">
+    <value>强行修复</value>
+  </data>
+  <data name="GameCoexistenceForceRepairTitle" xml:space="preserve">
+    <value>强行修复并关闭共存</value>
+  </data>
+  <data name="GameCoexistenceForceRepairConfirmation" xml:space="preserve">
+    <value>当前客户端：{2}
+
+将删除当前客户端中受共存管理且仍共享的文件链接，关闭两服共存关联，再按当前正式版清单执行一次完整校验修复。不会先复制大型资源；另一服的文件和当前客户端的独立文件保留。
+
+缺失及损坏资源将重新下载，可能产生大量下载流量。仅删除链接不会释放另一服仍占用的资源空间，修复需要额外空间。
+
+预计共享资源重新下载所需空间（含临时余量）：{0}
+当前可用空间：{1}
+其他缺失或损坏资源可能还需要额外空间。
+
+请关闭游戏、官方启动器和其他修改游戏的程序。删除链接后若修复取消或失败，共存仍保持关闭，当前客户端需再次修复后才能正常使用。解除过程中若中断，会保留恢复记录供重试。
+
+确定删除当前共享链接、关闭共存并修复吗？</value>
+  </data>
+  <data name="GameCoexistenceDisablingForRepair" xml:space="preserve">
+    <value>正在删除当前客户端的共享链接并关闭共存，随后完整校验修复……</value>
   </data>
 </root>

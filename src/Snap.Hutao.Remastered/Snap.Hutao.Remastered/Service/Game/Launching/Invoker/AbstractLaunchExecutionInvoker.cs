@@ -8,6 +8,7 @@ using Snap.Hutao.Remastered.Service.Game.FileSystem;
 using Snap.Hutao.Remastered.Service.Game.Launching.Context;
 using Snap.Hutao.Remastered.Service.Game.Launching.Handler;
 using Snap.Hutao.Remastered.Service.Game.Package;
+using Snap.Hutao.Remastered.Service.Game.Package.Advanced;
 using Snap.Hutao.Remastered.Service.Plugin;
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
@@ -35,6 +36,11 @@ public abstract class AbstractLaunchExecutionInvoker
         try
         {
             Invokers.TryAdd(this, default);
+            if (context.ServiceProvider.GetRequiredService<IGamePackageService>().IsOperationRunning)
+            {
+                throw HutaoException.InvalidOperation(SH.GameCoexistenceOperationBusy);
+            }
+
             await InvokeCoreAsync(context, taskContext).ConfigureAwait(false);
         }
         finally

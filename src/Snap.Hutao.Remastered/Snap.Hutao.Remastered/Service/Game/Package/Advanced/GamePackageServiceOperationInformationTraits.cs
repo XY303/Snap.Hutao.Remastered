@@ -33,6 +33,26 @@ public sealed partial class GamePackageServiceOperationInformationTraits
         if (context.Kind is GamePackageOperationKind.Verify)
         {
             ArgumentNullException.ThrowIfNull(localBuild);
+            if (context.DisableCoexistenceForRepair)
+            {
+                long recoveryBytes = GameServerCoexistenceStorage.GetRequiredUnlinkRepairBytes(context.EffectiveGameDirectory);
+                foreach (AssetProperty asset in localBuild.Manifests.SelectMany(manifest => manifest.Data.Assets))
+                {
+                    if (!File.Exists(Path.Combine(context.EffectiveGameDirectory, asset.AssetName)))
+                    {
+                        recoveryBytes = checked(recoveryBytes + asset.AssetSize);
+                    }
+                }
+
+                long requiredBytes = checked(recoveryBytes + (1024L * 1024L * 1024L));
+                long available = LogicalDrive.GetAvailableFreeSpace(context.EffectiveGameDirectory);
+                string forceRepairMessage = SH.FormatGameCoexistenceForceRepairConfirmation(Converters.ToFileSizeString(requiredBytes), Converters.ToFileSizeString(available), context.GameFileSystem.GameFilePath);
+                if (await contentDialogFactory.CreateForConfirmCancelAsync(SH.GameCoexistenceForceRepairTitle, forceRepairMessage, ContentDialogButton.Close, requiredBytes <= available).ConfigureAwait(false) is not ContentDialogResult.Primary)
+                {
+                    return default;
+                }
+            }
+
             return new(0, localBuild.TotalChunks, 0, localBuild.UncompressedTotalBytes, default);
         }
 
