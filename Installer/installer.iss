@@ -13,16 +13,41 @@
 #ifndef MyAppVersion
   #define MyAppVersion "2.0.2.0"
 #endif
-#define MyAppPublisher "SnapHutaoRemasteringProject"
+#ifndef MyAppPublisher
+  #define MyAppPublisher "SnapHutaoRemasteringProject"
+#endif
 #define MyAppURL "https://github.com/SnapHutaoRemasteringProject/Snap.Hutao.Remastered"
 #define MyAppExeName "Snap.Hutao.Remastered.exe"
 #define MyAppAssocName "Hutao Protocol"
 #define MyAppAssocExt ".hutao"
 #define MyAppAssocKey "hutao"
 #define CodeSigningCertificateFileName "SnapHutaoRemasteringProjectCodeSigning.cer"
+#define RootCertificateFileName "SnapHutaoLocalRootCA.cer"
 
+#ifdef RootCertificatePath
+  #ifndef RootCertificateThumbprint
+    #error RootCertificatePath requires RootCertificateThumbprint.
+  #endif
+  #if Len(RootCertificateThumbprint) != 40
+    #error RootCertificateThumbprint must contain the 40-character SHA1 certificate thumbprint.
+  #endif
+#else
+  #ifdef RootCertificateThumbprint
+    #error RootCertificateThumbprint requires RootCertificatePath.
+  #endif
+#endif
+#ifdef CodeSigningCertificatePath
+  #ifndef CodeSigningCertificateThumbprint
+    #error CodeSigningCertificatePath requires CodeSigningCertificateThumbprint.
+  #endif
+#endif
+
+#ifndef PublishDir
 #define PublishDir "Publish"
+#endif
+#ifndef OutputDir
 #define OutputDir "..\publish"
+#endif
 
 [Setup]
 AppId={{E8B6E2B3-D2A0-4435-A81D-2A16AAF405C8}
@@ -48,6 +73,10 @@ DisableProgramGroupPage=no
 SetupIconFile=..\src\Snap.Hutao.Remastered\Snap.Hutao.Remastered\Assets\Logo.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 UninstallDisplayName={#MyAppName}
+#ifdef SignToolName
+SignTool={#SignToolName}
+SignedUninstaller=yes
+#endif
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -56,17 +85,25 @@ Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"
 [CustomMessages]
 ; English (default)
 CreateStartMenuIcon=Create a Start Menu shortcut(&S)
+RootTrustInstallFailed=The local signing root certificate could not be installed. Setup cannot continue.
 ; Chinese Simplified
 chinesesimplified.CreateStartMenuIcon=创建开始菜单快捷方式(&S)
+chinesesimplified.RootTrustInstallFailed=无法安装本地签名根证书，安装程序无法继续。
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce
 Name: "startmenuicon"; Description: "{cm:CreateStartMenuIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce
 
 [Files]
+#ifdef RootCertificatePath
+; Extract this public certificate in PrepareToInstall, before application files.
+; Keep it first so solid compression does not require decoding the app to find it.
+; RootCertificatePath must be DER: its file SHA1 equals the X.509 thumbprint.
+Source: "{#RootCertificatePath}"; DestName: "{#RootCertificateFileName}"; Flags: dontcopy
+#endif
 Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "VC_redist.x64.exe"; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall; Check: not IsVCInstalled
-#ifdef CodeSigningCertificatePath
+#if defined CodeSigningCertificatePath && !defined RootCertificatePath
 Source: "{#CodeSigningCertificatePath}"; DestDir: "{tmp}"; DestName: "{#CodeSigningCertificateFileName}"; Flags: ignoreversion deleteafterinstall
 #endif
 
@@ -95,6 +132,15 @@ const
   CodeSigningCertificateFileName = '{#CodeSigningCertificateFileName}';
   CertificateTrustMarkerKey = 'Software\SnapHutaoRemasteringProject\Snap.Hutao.Remastered';
   CertificateTrustMarkerValue = 'InstallerCreatedTrustedPeopleThumbprint';
+#ifdef RootCertificatePath
+  RootCertificateThumbprint = '{#RootCertificateThumbprint}';
+  RootCertificateFileName = '{#RootCertificateFileName}';
+  RootTrustMarkerKey = 'Software\SnapHutaoRemasteringProject\Snap.Hutao.Remastered\InstallerOwnedRoots';
+
+var
+  RootAddedThisRun: Boolean;
+  RootInstallationCompleted: Boolean;
+#endif
 
 function IsVCInstalled: Boolean;
 var
@@ -117,7 +163,131 @@ begin
   end;
 end;
 
-#ifdef CodeSigningCertificatePath
+#ifdef RootCertificatePath
+function CertificateExistsInRoot: Boolean;
+begin
+  Result := RegKeyExists(
+    HKEY_LOCAL_MACHINE,
+    'SOFTWARE\Microsoft\SystemCertificates\Root\Certificates\' + RootCertificateThumbprint);
+end;
+
+function RemoveLocalRootCertificate: Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := True;
+  if CertificateExistsInRoot then
+  begin
+    ResultCode := -1;
+    Result := Exec(
+      ExpandConstant('{sys}\certutil.exe'),
+      '-delstore Root ' + RootCertificateThumbprint,
+      '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Result := Result and (ResultCode = 0) and not CertificateExistsInRoot;
+    if not Result then
+      Log('Failed to remove installer-owned root certificate. Exit code: ' + IntToStr(ResultCode));
+  end;
+
+  if Result then
+  begin
+    RegDeleteValue(HKEY_LOCAL_MACHINE, RootTrustMarkerKey, RootCertificateThumbprint);
+    RegDeleteKeyIfEmpty(HKEY_LOCAL_MACHINE, RootTrustMarkerKey);
+    Log('Installer-owned root certificate and its marker are absent.');
+  end;
+end;
+
+procedure RollBackNewRootCertificate;
+begin
+  if RootAddedThisRun and not RootInstallationCompleted then
+    if RemoveLocalRootCertificate then
+      RootAddedThisRun := False;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  CertPath: string;
+  ResultCode: Integer;
+  Imported: Boolean;
+begin
+  Result := '';
+  { A retry must not mistake this attempt's failed import for pre-existing trust. }
+  RollBackNewRootCertificate;
+  if RootAddedThisRun then
+  begin
+    Result := CustomMessage('RootTrustInstallFailed');
+    Exit;
+  end;
+
+  if CertificateExistsInRoot then
+  begin
+    Log('Signing root already exists. Preserving its ownership state.');
+    Exit;
+  end;
+
+  try
+    ExtractTemporaryFile(RootCertificateFileName);
+    CertPath := ExpandConstant('{tmp}\' + RootCertificateFileName);
+    { SHA1 identifies the DER certificate here; it is not the signing algorithm. }
+    if CompareText(GetSHA1OfFile(CertPath), RootCertificateThumbprint) <> 0 then
+    begin
+      Log('Root certificate is not the expected DER certificate. Trust was not modified.');
+      Result := CustomMessage('RootTrustInstallFailed');
+      Exit;
+    end;
+    ResultCode := -1;
+    Imported := Exec(
+      ExpandConstant('{sys}\certutil.exe'),
+      '-addstore Root "' + CertPath + '"',
+      '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    RootAddedThisRun := CertificateExistsInRoot;
+    if Imported and (ResultCode = 0) and RootAddedThisRun then
+    begin
+      if RegWriteStringValue(
+        HKEY_LOCAL_MACHINE, RootTrustMarkerKey,
+        RootCertificateThumbprint, RootCertificateThumbprint) then
+      begin
+        Log('Installed and verified the local signing root before application installation.');
+        Exit;
+      end;
+      Log('Could not record ownership of the newly installed signing root.');
+    end
+    else
+      Log('Signing root import failed or its thumbprint was not found. Exit code: ' + IntToStr(ResultCode));
+  except
+    Log('Signing root preparation failed: ' + GetExceptionMessage);
+  end;
+
+  RollBackNewRootCertificate;
+  Result := CustomMessage('RootTrustInstallFailed');
+end;
+
+procedure DeinitializeSetup;
+begin
+  { Covers cancellation and normal installation failures after PrepareToInstall. }
+  RollBackNewRootCertificate;
+end;
+
+procedure RemoveInstallerOwnedRootCertificate;
+var
+  InstalledThumbprint: string;
+begin
+  if not RegQueryStringValue(
+    HKEY_LOCAL_MACHINE, RootTrustMarkerKey,
+    RootCertificateThumbprint, InstalledThumbprint) then
+  begin
+    Log('No ownership marker for this signing root. Preserving existing trust.');
+    Exit;
+  end;
+
+  if CompareText(InstalledThumbprint, RootCertificateThumbprint) <> 0 then
+  begin
+    Log('Signing root ownership marker does not match this installer. Preserving existing trust.');
+    Exit;
+  end;
+
+  RemoveLocalRootCertificate;
+end;
+#elif defined CodeSigningCertificatePath
 function CertificateExistsInTrustedPeople: Boolean;
 begin
   Result := RegKeyExists(
@@ -145,7 +315,7 @@ begin
   end;
 
   if Exec(
-    'certutil.exe',
+    ExpandConstant('{sys}\certutil.exe'),
     '-addstore TrustedPeople "' + CertPath + '"',
     '',
     SW_HIDE,
@@ -195,7 +365,7 @@ begin
   end;
 
   if Exec(
-    'certutil.exe',
+    ExpandConstant('{sys}\certutil.exe'),
     '-delstore TrustedPeople ' + CodeSigningCertificateThumbprint,
     '',
     SW_HIDE,
@@ -214,7 +384,10 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-#ifdef CodeSigningCertificatePath
+#ifdef RootCertificatePath
+  if CurStep = ssDone then
+    RootInstallationCompleted := True;
+#elif defined CodeSigningCertificatePath
   if CurStep = ssPostInstall then
   begin
     InstallCodeSigningCertificate;
@@ -226,7 +399,10 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   DataDir: string;
 begin
-#ifdef CodeSigningCertificatePath
+#ifdef RootCertificatePath
+  if CurUninstallStep = usUninstall then
+    RemoveInstallerOwnedRootCertificate;
+#elif defined CodeSigningCertificatePath
   if CurUninstallStep = usUninstall then
   begin
     RemoveInstallerOwnedCodeSigningCertificate;
