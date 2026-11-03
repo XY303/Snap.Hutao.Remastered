@@ -6213,13 +6213,13 @@
     <value>根据账号自动选择服务器</value>
   </data>
   <data name="ViewPageLaunchGameAutoSelectServerDescription" xml:space="preserve">
-    <value>启动时按当前账号类型自动转换，仅匹配官服默认、bilibili 和国际服默认；无可识别账号时使用手动选择。</value>
+    <value>启动时按账号匹配官服、bilibili 或国际服默认区服。</value>
   </data>
   <data name="GameCoexistenceCardHeader" xml:space="preserve">
     <value>虚拟硬盘共存（实验性）</value>
   </data>
   <data name="GameCoexistenceCardDescription" xml:space="preserve">
-    <value>选择位置创建 ReFS 虚拟磁盘。开启后切换优先复用已有区服，仅缺少时新增独立版本，支持启动页面可选的各区服和渠道；关闭后恢复原安装的转换流程。可手动扫描占用和执行块克隆优化。</value>
+    <value>在虚拟硬盘中独立安装多个区服，共享相同资源以节省空间。</value>
   </data>
   <data name="GameCoexistenceCreateButton" xml:space="preserve">
     <value>创建虚拟磁盘双服</value>
@@ -6320,10 +6320,10 @@ ReFS、虚拟磁盘、反作弊及游戏更新器之间存在兼容性风险，�
     <value>空间优化（块克隆）</value>
   </data>
   <data name="GameCoexistenceInlineWarning" xml:space="preserve">
-    <value>切换优先复用已有区服；各区服独立安装。需要 Windows 支持 ReFS 和管理员权限。可能与反作弊、更新器不兼容并产生无法预见的错误，请仅通过胡桃启动和管理。</value>
+    <value>需管理员权限及 ReFS 支持。可能与反作弊或更新器不兼容，并产生无法预见的错误；请仅通过胡桃启动和管理。</value>
   </data>
   <data name="GameCoexistenceScanHint" xml:space="preserve">
-    <value>扫描需读取大文件，可能耗时较长；优化仅共享完全相同的数据块，写入相互隔离，不会自动压缩宿主 VHDX。</value>
+    <value>扫描可能较慢。优化共享相同数据，写入独立；不会缩小 VHDX 文件。</value>
   </data>
   <data name="GameCoexistenceDeleteVersionHeader" xml:space="preserve">
     <value>删除版本（含重复和未完成的版本）</value>
@@ -6338,19 +6338,19 @@ ReFS、虚拟磁盘、反作弊及游戏更新器之间存在兼容性风险，�
     <value>增加共存区服</value>
   </data>
   <data name="GameCoexistenceAddServerDescription" xml:space="preserve">
-    <value>选择要增加的区服，在虚拟硬盘中创建独立安装；已存在时复用。完成后保留当前启动版本，自动选服仍按账号匹配区服。</value>
+    <value>在虚拟硬盘中新增区服，已有区服直接复用。</value>
   </data>
   <data name="GameCoexistenceManageHeader" xml:space="preserve">
     <value>虚拟硬盘管理</value>
   </data>
   <data name="GameCoexistenceManageDescription" xml:space="preserve">
-    <value>分别管理启动版本、空间占用与版本清理。</value>
+    <value>选择启动版本、查看占用或清理版本。</value>
   </data>
   <data name="GameCoexistenceVersionsHeader" xml:space="preserve">
     <value>启动版本</value>
   </data>
   <data name="GameCoexistenceVersionsDescription" xml:space="preserve">
-    <value>开启共存后，选择已安装版本并应用。开启按账号自动选服时，启动仍按账号匹配区服。</value>
+    <value>选择版本后应用；自动选服开启时，以账号匹配结果为准。</value>
   </data>
   <data name="GameCoexistenceSpaceHeader" xml:space="preserve">
     <value>空间占用与优化</value>
@@ -6359,7 +6359,7 @@ ReFS、虚拟磁盘、反作弊及游戏更新器之间存在兼容性风险，�
     <value>删除共存版本</value>
   </data>
   <data name="GameCoexistenceCleanupDescription" xml:space="preserve">
-    <value>可清理重复或未完成版本。请先切换到其他安装再删除当前版本；删除永久生效，需确认。</value>
+    <value>永久删除所选版本。当前使用的版本需先切换后再删除。</value>
   </data>
   <data name="GameCoexistenceServerReady" xml:space="preserve">
     <value>共存区服已就绪，可在“启动版本”中选择，或使用按账号自动选服。当前启动版本保持不变。</value>

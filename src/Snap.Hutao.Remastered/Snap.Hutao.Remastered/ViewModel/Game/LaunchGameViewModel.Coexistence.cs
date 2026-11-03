@@ -51,7 +51,7 @@ public sealed partial class LaunchGameViewModel
             CoexistenceDeletableVersions = library.Entries.ToList();
             SelectedCoexistenceDeletionVersion = null;
             SelectedCoexistenceVersion = CoexistenceVersions.FirstOrDefault(e => e.GetExecutable(disk).Equals(LaunchOptions.GamePathEntry.Value?.Path, StringComparison.OrdinalIgnoreCase));
-            CoexistenceStatus = $"{(LaunchOptions.CoexistenceEnabled.Value ? "已开启" : "已关闭（保留虚拟盘）")}：{disk.ImagePath}；共 {library.Entries.Count} 个版本";
+            CoexistenceStatus = string.Empty;
             if (refreshSpace) { CoexistenceSpace = usage; }
         }
         catch (Exception ex)
