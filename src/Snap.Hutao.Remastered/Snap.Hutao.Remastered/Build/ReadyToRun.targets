@@ -1,11 +1,12 @@
 <Project>
   <!-- MSIX already consumes ComputeFilesToPublish. Also deliver the same current
-       R2R images to bin for the unpackaged F5 profile and directly launched exe.
+       R2R images to bin when ReadyToRunOnBuild is explicitly enabled (or in a full
+       validation build). Fast local Build/F5 skips this extra publish pipeline.
        Never overwrite IntermediateAssembly in obj: it remains the IL compiler input. -->
   <Target Name="CopyReadyToRunToBuildOutput"
           AfterTargets="Build"
           DependsOnTargets="ComputeFilesToPublish"
-          Condition="'$(DesignTimeBuild)' != 'true' and '$(PublishReadyToRun)' == 'true'">
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(PublishReadyToRun)' == 'true' and '$(ReadyToRunOnBuild)' == 'true'">
     <Error Condition="'@(_ReadyToRunFilesToPublish)' == ''" Text="ReadyToRun is enabled, but the SDK produced no ReadyToRun build outputs." />
     <Copy SourceFiles="@(_ReadyToRunFilesToPublish)"
           DestinationFiles="@(_ReadyToRunFilesToPublish->'$(OutDir)%(RelativePath)')"

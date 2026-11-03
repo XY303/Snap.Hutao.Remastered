@@ -44,11 +44,11 @@
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <PublishReadyToRun>true</PublishReadyToRun>
     <MvvmToolkitEnableINotifyPropertyChangingSupport>false</MvvmToolkitEnableINotifyPropertyChangingSupport>
-    <EnforceCodeStyleInBuild>True</EnforceCodeStyleInBuild>
-    <GenerateDocumentationFile>True</GenerateDocumentationFile>
     <AppxPackageSigningEnabled>False</AppxPackageSigningEnabled>
     <AppxPackageSigningTimestampDigestAlgorithm>SHA256</AppxPackageSigningTimestampDigestAlgorithm>
   </PropertyGroup>
+
+  <Import Project="Build\Compilation.props" />
 
   <!-- Report future Native AOT blockers without trimming, disabling features, or changing runtime behavior. -->
   <PropertyGroup Condition="'$(AotAnalysis)' == 'true'">

@@ -1,0 +1,16 @@
+<Project>
+  <!-- Fast local builds apply equally to Debug and Release. Skip only build-time
+       diagnostics, keeping source generators and editor live analysis enabled. -->
+  <PropertyGroup>
+    <FullAnalysis Condition="'$(FullAnalysis)' == '' and ('$(ContinuousIntegrationBuild)' == 'true' or '$(CI)' == 'true' or '$(GITHUB_ACTIONS)' == 'true' or '$(AotAnalysis)' == 'true')">true</FullAnalysis>
+    <FullAnalysis Condition="'$(FullAnalysis)' == ''">false</FullAnalysis>
+    <RunAnalyzersDuringBuild Condition="'$(RunAnalyzersDuringBuild)' == ''">$(FullAnalysis)</RunAnalyzersDuringBuild>
+    <EnforceCodeStyleInBuild>$(FullAnalysis)</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>$(FullAnalysis)</GenerateDocumentationFile>
+    <!-- Publishing still uses PublishReadyToRun=true. Local Build/F5 can use IL. -->
+    <ReadyToRunOnBuild Condition="'$(ReadyToRunOnBuild)' == '' and '$(FullAnalysis)' == 'true'">true</ReadyToRunOnBuild>
+    <ReadyToRunOnBuild Condition="'$(ReadyToRunOnBuild)' == ''">false</ReadyToRunOnBuild>
+    <UseSharedCompilation Condition="'$(UseSharedCompilation)' == ''">true</UseSharedCompilation>
+    <BuildInParallel Condition="'$(BuildInParallel)' == ''">true</BuildInParallel>
+  </PropertyGroup>
+</Project>
