@@ -8,6 +8,7 @@ using Snap.Hutao.Remastered.Core.Setting;
 using Snap.Hutao.Remastered.Factory.ContentDialog;
 using Snap.Hutao.Remastered.Service.Game;
 using Snap.Hutao.Remastered.Service.Game.Configuration;
+using Snap.Hutao.Remastered.Service.Game.Coexistence;
 using Snap.Hutao.Remastered.Service.Game.FileSystem;
 using Snap.Hutao.Remastered.Service.Game.Package;
 using Snap.Hutao.Remastered.Service.Game.Package.Advanced;
@@ -228,12 +229,15 @@ public sealed partial class GamePackageViewModel : Abstraction.ViewModel
             return;
         }
 
-        bool forceRepair = operation is "ForceRepair";
-        if (!Enum.TryParse(forceRepair ? nameof(GamePackageOperationKind.Verify) : operation, out GamePackageOperationKind operationKind))
+        if (!Enum.TryParse(operation, out GamePackageOperationKind operationKind))
         {
             return;
         }
 
+        if (launchOptions.GamePathEntry.Value?.Path is { } selectedExecutable)
+        {
+            await GameCoexistenceVirtualDisk.EnsureMountedAsync(selectedExecutable).ConfigureAwait(false);
+        }
         if (launchGameShared.GetCurrentLaunchSchemeFromConfigurationFile() is not { } currentScheme)
         {
             return;
@@ -257,11 +261,7 @@ public sealed partial class GamePackageViewModel : Abstraction.ViewModel
             }
 
             Version? manifestVersion = installation.InstalledVersion;
-            if (forceRepair)
-            {
-                Version.TryParse(branch.Main.Tag, out manifestVersion);
-            }
-            else if (manifestVersion is null && operationKind is GamePackageOperationKind.Verify)
+            if (manifestVersion is null && operationKind is GamePackageOperationKind.Verify)
             {
                 BranchWrapper repairTarget = LocalSetting.Get(SettingKeys.TreatPredownloadAsMain, false) ? branch.PreDownload ?? branch.Main : branch.Main;
                 Version.TryParse(repairTarget.Tag, out manifestVersion);
@@ -271,15 +271,13 @@ public sealed partial class GamePackageViewModel : Abstraction.ViewModel
                 messenger.Send(InfoBarMessage.Warning(installation.HasVersionConflict ? SH.ViewModelGameInstallationConflict : SH.ViewModelGameInstallationInvalid));
                 return;
             }
-            SophonDecodedBuilds? builds = await GetSophonDecodedBuildsAsync(operationKind, branch, gameFileSystem, manifestVersion, forceRepair).ConfigureAwait(false);
+            SophonDecodedBuilds? builds = await GetSophonDecodedBuildsAsync(operationKind, branch, gameFileSystem, manifestVersion).ConfigureAwait(false);
             if (builds is null) { return; }
             GameChannelSDK? sdk = await GetCurrentGameChannelSDKAsync(currentScheme).ConfigureAwait(false);
             PredownloadProgressTracker? tracker = operationKind is GamePackageOperationKind.Predownload ? new() : null;
             GamePackageOperationContext context = new(serviceProvider, operationKind, gameFileSystem)
             {
                 InstallationAtPreparation = installation,
-                DisableCoexistenceForRepair = forceRepair,
-                CoexistenceDisabled = forceRepair ? () => serviceProvider.GetRequiredService<LaunchGameViewModel>().RefreshCoexistenceStatusAsync().SafeForget() : null,
                 LocalBuild = builds.LocalBuild,
                 RemoteBuild = builds?.RemoteBuild,
                 PatchBuild = builds?.PatchBuild,
@@ -299,10 +297,15 @@ public sealed partial class GamePackageViewModel : Abstraction.ViewModel
                 {
                     return;
                 }
-                if (operationKind is GamePackageOperationKind.Verify && (installation.HasVersionProblem || forceRepair))
+                if (operationKind is GamePackageOperationKind.Verify && installation.HasVersionProblem)
                 {
                     // The chosen manifest has now been fully checked/repaired.
                     GameInstallationMetadataRepair.Commit(gameFileSystem.GameConfigurationFilePath, gameFileSystem.ScriptVersionFilePath, manifestVersion);
+                }
+
+                if (operationKind is GamePackageOperationKind.Verify)
+                {
+                    await serviceProvider.GetRequiredService<LaunchGameViewModel>().RefreshCoexistenceStatusAsync().ConfigureAwait(false);
                 }
             }
             finally
@@ -392,7 +395,7 @@ public sealed partial class GamePackageViewModel : Abstraction.ViewModel
         OnPropertyChanged(nameof(PredownloadProgressText));
     }
 
-    private async ValueTask<SophonDecodedBuilds?> GetSophonDecodedBuildsAsync(GamePackageOperationKind operationKind, GameBranch branch, IGameFileSystem gameFileSystem, Version manifestVersion, bool forceRepair = false)
+    private async ValueTask<SophonDecodedBuilds?> GetSophonDecodedBuildsAsync(GamePackageOperationKind operationKind, GameBranch branch, IGameFileSystem gameFileSystem, Version manifestVersion)
     {
 
         SophonDecodedBuild? localBuild;
@@ -406,7 +409,7 @@ public sealed partial class GamePackageViewModel : Abstraction.ViewModel
         {
             try
             {
-                BranchWrapper localBranch = !forceRepair && operationKind is GamePackageOperationKind.Verify && LocalSetting.Get(SettingKeys.TreatPredownloadAsMain, false)
+                BranchWrapper localBranch = operationKind is GamePackageOperationKind.Verify && LocalSetting.Get(SettingKeys.TreatPredownloadAsMain, false)
                     ? branch.PreDownload?.GetTaggedCopy(manifestVersion.ToString()) ?? branch.Main.GetTaggedCopy(manifestVersion.ToString())
                     : branch.Main.GetTaggedCopy(manifestVersion.ToString());
                 localBuild = await gamePackageService.DecodeManifestsAsync(gameFileSystem, localBranch).ConfigureAwait(false);

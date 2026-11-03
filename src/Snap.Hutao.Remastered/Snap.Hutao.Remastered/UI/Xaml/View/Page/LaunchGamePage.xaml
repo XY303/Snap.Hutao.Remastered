@@ -451,12 +451,6 @@
                                                     Style="{StaticResource DefaultAppBarButtonStyle}"/>
                                                 <AppBarButton
                                                     Command="{x:Bind ((shvg:LaunchGameViewModel)DataContext).GamePackageViewModel.StartCommand, Mode=OneWay}"
-                                                    CommandParameter="ForceRepair"
-                                                    Icon="{shuxm:FontIcon Glyph={StaticResource FontIconContentDeveloperTools}}"
-                                                    IsEnabled="{x:Bind ((shvg:LaunchGameViewModel)DataContext).GamePackageViewModel.CanOperate, Mode=OneWay}"
-                                                    Label="{shuxm:ResourceString Name=GameCoexistenceForceRepairButton}"/>
-                                                <AppBarButton
-                                                    Command="{x:Bind ((shvg:LaunchGameViewModel)DataContext).GamePackageViewModel.StartCommand, Mode=OneWay}"
                                                     CommandParameter="Update"
                                                     Icon="{shuxm:FontIcon Glyph={StaticResource FontIconContentUpArrowShiftKey}}"
                                                     IsEnabled="{x:Bind ((shvg:LaunchGameViewModel)DataContext).GamePackageViewModel.IsUpdateAvailable, Mode=OneWay}"
@@ -591,11 +585,15 @@
                                             Header="{shuxm:ResourceString Name=GameCoexistenceCardHeader}"
                                             HeaderIcon="{shuxm:FontIcon Glyph=&#xE8AB;}">
                                             <StackPanel MaxWidth="360" Spacing="8">
-                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <StackPanel HorizontalAlignment="Right" Spacing="8">
                                                     <Button
                                                         IsEnabled="{x:Bind ((shvg:LaunchGameViewModel)DataContext).IsCoexistenceBusy, Converter={StaticResource BoolNegationConverter}, Mode=OneWay}"
                                                         Command="{x:Bind ((shvg:LaunchGameViewModel)DataContext).CreateCoexistingServerCommand, Mode=OneWay}"
                                                         Content="{shuxm:ResourceString Name=GameCoexistenceCreateButton}"/>
+                                                    <Button
+                                                        IsEnabled="{x:Bind ((shvg:LaunchGameViewModel)DataContext).IsCoexistenceBusy, Converter={StaticResource BoolNegationConverter}, Mode=OneWay}"
+                                                        Command="{x:Bind ((shvg:LaunchGameViewModel)DataContext).MountCoexistenceDiskCommand, Mode=OneWay}"
+                                                        Content="{shuxm:ResourceString Name=GameCoexistenceMountButton}"/>
                                                     <Button
                                                         IsEnabled="{x:Bind ((shvg:LaunchGameViewModel)DataContext).IsCoexistenceBusy, Converter={StaticResource BoolNegationConverter}, Mode=OneWay}"
                                                         Command="{x:Bind ((shvg:LaunchGameViewModel)DataContext).UnpairGameServersCommand, Mode=OneWay}"

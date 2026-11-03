@@ -66,11 +66,6 @@ public sealed partial class GamePackageService : IGamePackageService
 
     public async ValueTask<bool> ExecuteOperationAsync(GamePackageOperationContext operationContext)
     {
-        if (operationContext.DisableCoexistenceForRepair && operationContext.Kind is not GamePackageOperationKind.Verify)
-        {
-            throw new InvalidOperationException("Only verification/repair can disable coexistence automatically.");
-        }
-
         // Install/extract contexts may not own a normal GameFileSystem read lock.
         // Keep association/unpairing excluded for the entire package operation, not just detach.
         if (!serviceProvider.GetRequiredService<LaunchOptions>().GamePathLock.TryReaderLock(nameof(GamePackageService), out AsyncReaderWriterLock.Releaser pathAccess))
@@ -191,48 +186,40 @@ public sealed partial class GamePackageService : IGamePackageService
                         try
                         {
                             GameServerCoexistenceState? coexistence = GameServerCoexistenceStorage.ReadState(operationContext.EffectiveGameDirectory);
-                            if (coexistence is { CreationPending: true } && !operationContext.DisableCoexistenceForRepair)
+                            if (coexistence is { CreationPending: true }
+                                && (coexistence.Format == 1 || operationContext.Kind is not GamePackageOperationKind.Verify))
                             {
                                 throw new InvalidOperationException(SH.GameCoexistenceCreationPending);
                             }
 
-                            if ((coexistence is not null || operationContext.DisableCoexistenceForRepair) && AbstractLaunchExecutionInvoker.Invoking())
+                            if (coexistence is not null && AbstractLaunchExecutionInvoker.Invoking())
                             {
                                 throw new InvalidOperationException(SH.GameCoexistenceOperationBusy);
                             }
 
-                            if ((coexistence is not null || operationContext.DisableCoexistenceForRepair) && await GameLifeCycle.IsGameRunningAsync(taskContext).ConfigureAwait(false))
+                            if (coexistence is not null && await GameLifeCycle.IsGameRunningAsync(taskContext).ConfigureAwait(false))
                             {
                                 throw new InvalidOperationException(SH.ServiceGameLaunchExecutionGameIsRunning);
                             }
 
                             // Verify can repair, and predownloads may be consumed by external updaters.
                             // Restore independent resources inside the cancellable/retryable window.
-                            if (coexistence?.SharedFiles.Count > 0)
+                            if (coexistence is { Format: 1, SharedFiles.Count: > 0 })
                             {
                                 progress.Report(new GamePackageOperationReport.Reset(SH.FormatGameCoexistenceRestoring(string.Empty)));
                             }
 
-                            if (operationContext.DisableCoexistenceForRepair && coexistence is not null)
-                            {
-                                progress.Report(new GamePackageOperationReport.Reset(SH.GameCoexistenceDisablingForRepair));
-                                await GameServerCoexistenceStorage.UnlinkForRepairAsync(
-                                    operationContext.EffectiveGameDirectory,
-                                    new CoexistenceProgress(progress),
-                                    operationCtsLocal.Token,
-                                    () => serviceContext.WaitForExecutionAsync().AsTask()).ConfigureAwait(false);
-                                operationContext.CoexistenceDisabled?.Invoke();
-                            }
-                            else
-                            {
-                                await GameServerCoexistenceStorage.DetachAsync(
-                                    operationContext.EffectiveGameDirectory,
-                                    new CoexistenceProgress(progress),
-                                    operationCtsLocal.Token,
-                                    () => serviceContext.WaitForExecutionAsync().AsTask()).ConfigureAwait(false);
-                            }
+                            await GameServerCoexistenceStorage.DetachAsync(
+                                operationContext.EffectiveGameDirectory,
+                                new CoexistenceProgress(progress),
+                                operationCtsLocal.Token,
+                                () => serviceContext.WaitForExecutionAsync().AsTask()).ConfigureAwait(false);
                             await serviceContext.WaitForExecutionAsync().ConfigureAwait(false);
                             await operation.ExecuteAsync(serviceContext).ConfigureAwait(false);
+                            if (operationContext.Kind is GamePackageOperationKind.Verify)
+                            {
+                                GameServerCoexistenceStorage.MarkVirtualInstallationRepaired(operationContext.EffectiveGameDirectory);
+                            }
                             result = true;
                             break;
                         }

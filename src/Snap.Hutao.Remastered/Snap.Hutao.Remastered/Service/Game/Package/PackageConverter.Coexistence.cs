@@ -1,4 +1,4 @@
-﻿// Copyright (c) Snap Hutao RP. All rights reserved.
+// Copyright (c) Snap Hutao RP. All rights reserved.
 // Licensed under the MIT license.
 
 using Snap.Hutao.Remastered.Service.Game.Coexistence;
@@ -105,7 +105,7 @@ public sealed partial class PackageConverter
             assets.Add(new(asset.AssetName, path, asset.AssetSize, asset.AssetHashMd5));
         }
 
-        return await GameServerCoexistenceStorage.CreateFromManifestAsync(context.GameFileSystem.GameFilePath, targetExecutable, assets, finishInstallation, progress, token).ConfigureAwait(false);
+        return await GameServerCoexistenceStorage.CreateClonedFromManifestAsync(context.GameFileSystem.GameFilePath, targetExecutable, assets, finishInstallation, progress, token).ConfigureAwait(false);
     }
 
     private static string NormalizeAssetName(string name)

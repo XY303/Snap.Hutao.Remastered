@@ -6216,49 +6216,51 @@
     <value>启动时按当前账号类型自动转换，仅匹配官服默认、bilibili 和国际服默认；无可识别账号时使用手动选择。</value>
   </data>
   <data name="GameCoexistenceCardHeader" xml:space="preserve">
-    <value>多服共存（实验性）</value>
+    <value>虚拟磁盘双服共存（实验性）</value>
   </data>
   <data name="GameCoexistenceCardDescription" xml:space="preserve">
-    <value>基于当前客户端与区服转换清单，复用相同资源并下载差异文件，生成国服/国际服入口。仅支持官服默认与国际服默认、同一 NTFS 卷。启用后请仅通过胡桃启动和更新。存在兼容性风险及无法预见的错误。</value>
+    <value>从当前完整客户端创建 ReFS VHDX，在盘内同时安装官服默认与国际服默认。相同大型资源使用写时复制；小文件独立复制。首次需复制完整客户端、管理员权限和额外空间。存在兼容性问题及无法预见的错误。</value>
   </data>
   <data name="GameCoexistenceCreateButton" xml:space="preserve">
-    <value>按转换清单创建共存</value>
+    <value>创建虚拟磁盘双服</value>
   </data>
   <data name="GameCoexistenceUnpairButton" xml:space="preserve">
-    <value>恢复独立并解除关联</value>
+    <value>解除选服关联</value>
   </data>
   <data name="GameCoexistenceRiskTitle" xml:space="preserve">
     <value>实验性功能：请先阅读兼容性风险</value>
   </data>
   <data name="GameCoexistenceRiskDescription" xml:space="preserve">
-    <value>本功能从当前完整客户端出发，使用区服转换所用的官方资源清单，复用相同资源、下载差异文件，自动生成另一服入口。不需要另一份已安装客户端。为隔离同名 DLL、配置、SDK 和运行时数据，另一服入口位于自动生成的相邻目录；相同的大型资源通过硬链接共享。仅支持官服默认和国际服默认，不支持 bilibili、其他渠道和两服同时运行。
+    <value>此功能先把当前完整客户端复制到新建的 ReFS 虚拟磁盘，再根据官方区服转换清单下载差异资源，生成国服 YuanShen.exe 和国际服 GenshinImpact.exe。原安装保留不动。仅支持官服默认与国际服默认，不支持 bilibili 或两服同时运行。
 
-启用后，请仅通过胡桃启动、更新、修复和预下载，不要直接双击 EXE 或使用官方启动器及第三方工具修改游戏。程序无法从系统层面阻止外部启动或写入。硬链接不是备份，任一共享文件被写入可能同时影响两服。
+相同大型资源通过 ReFS 块克隆共享底层数据，修改时自动分离；程序、配置、SDK、运行时数据和小文件独立复制，不使用硬链接。首次创建仍需一份完整客户端的实际空间，并需要管理员权限、Windows ReFS 格式化/块克隆及 Storage PowerShell 支持。系统不支持时停止，不安装驱动、不修改安全设置、不回退硬链接。
 
-游戏内热更新、反作弊及第三方工具的兼容性尚未实测，可能引发无法预见的错误，包括资源损坏、校验失败、无法启动或需要重新下载游戏。仅通过胡桃启动也不能消除这些风险。请先备份并关闭所有相关程序。
+这是实验性功能。原神、反作弊、游戏内热更新与官方启动器在此虚拟磁盘上的兼容性尚未验证，可能引发无法预见的错误，包括无法启动、资源损坏、更新失败、掉盘和重新下载。写时复制不是备份，请先备份。
 
-程序内更新修复前会恢复当前入口的独立资源，可能需要大量额外空间。恢复独立并解除关联后，两个入口保留为独立安装；不会自动删除游戏目录。</value>
+请仅通过胡桃启动、更新与修复。重启后首次使用可能需要以管理员身份重新挂载。动态虚拟盘的可用容量不等于宿主磁盘剩余空间，两服更新分歧会增加实际占用；不会自动扩容或压缩。不要在游戏或更新运行时卸载、移动或删除 VHDX 与描述文件。
+
+解除关联只关闭自动选服，两份安装仍在虚拟盘内，仍需挂载；不会将游戏导出或删除虚拟盘。</value>
   </data>
   <data name="GameCoexistenceSecondConfirmationTitle" xml:space="preserve">
     <value>二次确认：我理解并接受上述风险</value>
   </data>
   <data name="GameCoexistenceSecondConfirmation" xml:space="preserve">
-    <value>将使用当前客户端和国服/国际服转换清单创建另一服入口：
+    <value>将创建一个 ReFS VHDX，并在同一个卷中安装两个区服：
 
-当前客户端：{0}
-自动生成入口：{1}
+原客户端（保留）：{0}
+另一服入口：{1}
 
-仅下载差异资源，相同资源按规则共享；配置、SDK、程序和运行时目录独立。目标目录必须不存在，不会覆盖已有安装。创建需要网络连接及额外磁盘空间。
+会先复制一份完整客户端；大型相同资源通过块克隆共享，差异资源按转换清单准备，配置和运行时文件独立。目标容器必须不存在，不覆盖已有数据。需要网络、管理员权限以及完整客户端和更新所需的额外空间。
 
-我已理解兼容性尚未验证、可能出现无法预见的错误，并同意启用后仅通过胡桃启动和更新，接受游戏内热更新仍可能影响共享资源的风险。
+我已理解兼容性未经验证、可能出现无法预见的错误、动态虚拟盘有宿主空间与挂载要求，并同意仅通过胡桃启动和维护这两份安装。
 
 确定开始创建吗？</value>
   </data>
   <data name="GameCoexistenceUnpairTitle" xml:space="preserve">
-    <value>恢复独立文件并解除关联</value>
+    <value>解除两服选服关联</value>
   </data>
   <data name="GameCoexistenceUnpairDescription" xml:space="preserve">
-    <value>将把两份安装中仍共享的资源恢复为独立文件，并解除自动切换关联。此操作可能需要大量额外磁盘空间；空间不足或操作中断时会保留恢复记录，请再次执行本操作。请先关闭游戏、官方启动器和第三方工具。是否继续？</value>
+    <value>ReFS 写时复制已隔离两服写入，无需复制资源即可解除自动选服关联。两份安装仍留在虚拟磁盘中，仍需挂载才能使用，不会导出为普通目录或删除 VHDX。旧版硬链接记录仍需先复制恢复独立资源，可能需要大量空间。请关闭游戏及其他修改游戏的程序。是否继续？</value>
   </data>
   <data name="GameCoexistenceInstallationInvalid" xml:space="preserve">
     <value>需要版本文件正常、已更新到当前正式版本的官服默认或国际服默认客户端，且两服在线清单版本必须一致。请先在胡桃内更新并校验修复；不支持 bilibili 或其他渠道。</value>
@@ -6267,65 +6269,44 @@
     <value>游戏路径正在被启动或资源操作使用，请结束相关操作后重试。</value>
   </data>
   <data name="GameCoexistenceConvertBlocked" xml:space="preserve">
-    <value>此安装已关联多服共存，仅支持官服默认和国际服默认。请通过“启动游戏”切换到对应目录；如需原地转换或使用 bilibili，请先“恢复独立并解除关联”。</value>
+    <value>此安装已关联双服共存，仅支持官服默认和国际服默认。请通过“启动游戏”切换到对应入口；如需原地转换或使用 bilibili，请先解除选服关联。</value>
   </data>
   <data name="GameCoexistenceProcessing" xml:space="preserve">
     <value>正在处理资源：{0}</value>
   </data>
   <data name="GameCoexistencePreparing" xml:space="preserve">
-    <value>正在校验资源并准备共享，请勿启动游戏或更新客户端……</value>
+    <value>正在准备虚拟磁盘、复制基础客户端并校验资源，请勿启动或更新游戏……</value>
   </data>
   <data name="GameCoexistenceCompleted" xml:space="preserve">
-    <value>已按转换清单创建共存入口，共享 {0} 个资源文件，约节省 {1} GiB。请仅通过胡桃选择服务器并启动，或启用自动选服。</value>
+    <value>已在虚拟磁盘内创建双服，克隆 {0} 个资源文件、共享约 {1} GiB 数据。原安装保留，已选择虚拟盘内客户端。请选择服务器或启用自动选服。</value>
   </data>
   <data name="GameCoexistenceUnpaired" xml:space="preserve">
-    <value>已恢复独立资源并解除关联。</value>
+    <value>已解除选服关联。虚拟盘内安装仍需挂载；请勿删除仍在使用的 VHDX。</value>
   </data>
   <data name="GameCoexistenceInterrupted" xml:space="preserve">
-    <value>操作已取消，已生成的目录和恢复记录可能保留。请先“恢复独立并解除关联”；确认后自行移走未完成的生成目录，再重新创建。</value>
+    <value>操作已取消，原安装保留；虚拟磁盘及未完成安装可能保留。可“挂载并选择虚拟盘”，使用普通“修复游戏”分别校验两服，或解除选服关联。不会自动删除游戏数据。</value>
   </data>
   <data name="GameCoexistenceFailed" xml:space="preserve">
-    <value>多服共存操作失败。已完成的步骤可能保留，请查看错误详情；可重试“恢复独立并解除关联”。</value>
+    <value>虚拟磁盘双服操作失败。原安装保留，已创建的 VHDX 和恢复记录可能保留；请查看错误详情。不要删除仍在使用的虚拟磁盘。</value>
   </data>
   <data name="GameCoexistenceRestoring" xml:space="preserve">
     <value>正在恢复独立资源：{0}</value>
   </data>
   <data name="GameCoexistenceNotAssociated" xml:space="preserve">
-    <value>尚未创建多服共存，可从当前客户端按转换清单生成另一服入口。</value>
+    <value>尚未关联双服，可从当前完整客户端创建虚拟磁盘。已有虚拟盘可挂载并选择。</value>
   </data>
   <data name="GameCoexistenceAssociated" xml:space="preserve">
     <value>国服入口：{0}
 国际服入口：{1}
-请仅通过胡桃启动和更新。更新修复会解除当前入口的资源共享。</value>
+请仅通过胡桃启动和维护。ReFS 写时复制隔离两服更新，更新后共享量可能减少。</value>
   </data>
   <data name="GameCoexistenceDestinationExists" xml:space="preserve">
-    <value>已存在共存记录或目标目录。请先恢复独立并解除关联；如需重新创建，请自行移走已有生成目录。为防止覆盖游戏文件，程序不会复用非空目录。</value>
+    <value>已存在共存记录或虚拟磁盘容器，不会覆盖或重新格式化。已有虚拟盘请挂载并选择；旧版硬链接请先恢复独立并解除关联。重建前请自行备份或移走旧容器。</value>
   </data>
   <data name="GameCoexistenceCreationPending" xml:space="preserve">
-    <value>共存创建或恢复尚未完成，当前禁止启动和更新。可使用“强行修复”删除当前客户端的共享链接、关闭共存并完整修复，或先恢复独立并解除关联。</value>
+    <value>虚拟盘共存创建尚未完成，禁止启动和更新。可用普通“修复游戏”分别校验两服，或解除选服关联；原安装仍保留。旧版硬链接请先解除关联再修复。</value>
   </data>
-  <data name="GameCoexistenceForceRepairButton" xml:space="preserve">
-    <value>强行修复</value>
-  </data>
-  <data name="GameCoexistenceForceRepairTitle" xml:space="preserve">
-    <value>强行修复并关闭共存</value>
-  </data>
-  <data name="GameCoexistenceForceRepairConfirmation" xml:space="preserve">
-    <value>当前客户端：{2}
-
-将删除当前客户端中受共存管理且仍共享的文件链接，关闭两服共存关联，再按当前正式版清单执行一次完整校验修复。不会先复制大型资源；另一服的文件和当前客户端的独立文件保留。
-
-缺失及损坏资源将重新下载，可能产生大量下载流量。仅删除链接不会释放另一服仍占用的资源空间，修复需要额外空间。
-
-预计共享资源重新下载所需空间（含临时余量）：{0}
-当前可用空间：{1}
-其他缺失或损坏资源可能还需要额外空间。
-
-请关闭游戏、官方启动器和其他修改游戏的程序。删除链接后若修复取消或失败，共存仍保持关闭，当前客户端需再次修复后才能正常使用。解除过程中若中断，会保留恢复记录供重试。
-
-确定删除当前共享链接、关闭共存并修复吗？</value>
-  </data>
-  <data name="GameCoexistenceDisablingForRepair" xml:space="preserve">
-    <value>正在删除当前客户端的共享链接并关闭共存，随后完整校验修复……</value>
+  <data name="GameCoexistenceMountButton" xml:space="preserve">
+    <value>挂载并选择虚拟盘</value>
   </data>
 </root>

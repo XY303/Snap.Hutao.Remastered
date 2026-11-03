@@ -1,4 +1,4 @@
-﻿// Copyright (c) DGP Studio. All rights reserved.
+// Copyright (c) DGP Studio. All rights reserved.
 // Licensed under the MIT license.
 // Copyright (c) Millennium-Science-Technology-R-D-Inst. All rights reserved.
 // Licensed under the MIT license.
@@ -107,6 +107,10 @@ public sealed partial class LaunchGameShared
             DefaultLaunchExecutionInvoker invoker = new();
             try
             {
+                if (launchOptions.GamePathEntry.Value?.Path is { } selectedExecutable)
+                {
+                    await GameCoexistenceVirtualDisk.EnsureMountedAsync(selectedExecutable).ConfigureAwait(false);
+                }
                 LaunchScheme? launchScheme = viewModel.TargetScheme;
                 if (launchOptions.AutoSelectServer.Value)
                 {

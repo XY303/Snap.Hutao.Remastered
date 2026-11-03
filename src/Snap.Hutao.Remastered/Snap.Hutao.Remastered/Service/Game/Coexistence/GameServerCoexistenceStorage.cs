@@ -241,7 +241,7 @@ public static partial class GameServerCoexistenceStorage
     public static long GetRequiredDetachBytes(string root)
     {
         GameServerCoexistenceState? state = ReadState(root);
-        if (state is null)
+        if (state is null || state.Format == 2)
         {
             return 0;
         }
@@ -274,7 +274,7 @@ public static partial class GameServerCoexistenceStorage
     private static async Task DetachCoreAsync(string root, IProgress<string>? progress, CancellationToken token, Func<Task>? waitForResume = null)
     {
         GameServerCoexistenceState? state = ReadState(root);
-        if (state is null || state.SharedFiles.Count == 0)
+        if (state is null || state.Format == 2 || state.SharedFiles.Count == 0)
         {
             return;
         }
@@ -290,7 +290,14 @@ public static partial class GameServerCoexistenceStorage
             {
                 string temporary = path + suffix + state.PairId.ToString("N");
                 EnsureOrdinaryPath(temporary);
-                File.Delete(temporary);
+                try
+                {
+                    File.Delete(temporary);
+                }
+                catch (DirectoryNotFoundException)
+                {
+                    // Legacy interrupted builds may not have created this directory.
+                }
             }
 
             if (File.Exists(path) && GetLinkCount(path) > 1)
@@ -410,7 +417,7 @@ public static partial class GameServerCoexistenceStorage
 
     private static void ValidateState(string root, GameServerCoexistenceState state)
     {
-        if (state.Format != 1 || state.PairId == Guid.Empty || state.SharedFiles is null
+        if (state.Format is not (1 or 2) || state.PairId == Guid.Empty || state.SharedFiles is null
             || !Path.IsPathFullyQualified(state.ChineseExecutable) || !Path.IsPathFullyQualified(state.OverseaExecutable)
             || !Path.GetFileName(state.ChineseExecutable).Equals("YuanShen.exe", StringComparison.OrdinalIgnoreCase)
             || !Path.GetFileName(state.OverseaExecutable).Equals("GenshinImpact.exe", StringComparison.OrdinalIgnoreCase)
@@ -419,7 +426,25 @@ public static partial class GameServerCoexistenceStorage
             throw new InvalidDataException("Invalid coexistence journal fields.");
         }
 
-        ValidateRoots(GetRoot(state.ChineseExecutable), GetRoot(state.OverseaExecutable));
+        if (state.Format == 2)
+        {
+            GameVirtualDiskInfo disk = GameCoexistenceVirtualDisk.Find(state.ChineseExecutable)
+                ?? throw new InvalidDataException("Missing VHDX descriptor.");
+            if (!disk.ImagePath.Equals(state.VirtualDiskImage, StringComparison.OrdinalIgnoreCase)
+                || !disk.ChineseExecutable.Equals(state.ChineseExecutable, StringComparison.OrdinalIgnoreCase)
+                || !disk.OverseaExecutable.Equals(state.OverseaExecutable, StringComparison.OrdinalIgnoreCase)
+                || !GameRefsBlockClone.GetVolume(root).Equals(disk.VolumeName, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException("The journal does not match the managed virtual disk.");
+            }
+
+            GameRefsBlockClone.EnsureReFS(root);
+            EnsureOrdinaryPath(root);
+        }
+        else
+        {
+            ValidateRoots(GetRoot(state.ChineseExecutable), GetRoot(state.OverseaExecutable));
+        }
         string fullRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
         if (!fullRoot.Equals(GetRoot(state.ChineseExecutable), StringComparison.OrdinalIgnoreCase)
             && !fullRoot.Equals(GetRoot(state.OverseaExecutable), StringComparison.OrdinalIgnoreCase))
@@ -441,7 +466,9 @@ public static partial class GameServerCoexistenceStorage
     private static bool SamePair(GameServerCoexistenceState first, GameServerCoexistenceState second)
     {
         return first.ChineseExecutable.Equals(second.ChineseExecutable, StringComparison.OrdinalIgnoreCase)
-            && first.OverseaExecutable.Equals(second.OverseaExecutable, StringComparison.OrdinalIgnoreCase);
+            && first.OverseaExecutable.Equals(second.OverseaExecutable, StringComparison.OrdinalIgnoreCase)
+            && first.Format == second.Format
+            && string.Equals(first.VirtualDiskImage, second.VirtualDiskImage, StringComparison.OrdinalIgnoreCase);
     }
 
     private static void ValidateExistingPair(string root, string chineseExecutable, string overseaExecutable)
@@ -475,14 +502,15 @@ public static partial class GameServerCoexistenceStorage
         }
     }
 
-    private static void EnsureOrdinaryPath(string path)
+    internal static void EnsureOrdinaryPath(string path)
     {
         string? current = Path.GetFullPath(path);
         while (current is not null)
         {
             try
             {
-                if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+                if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0
+                    && !GameRefsBlockClone.IsVolumeMountPoint(current))
                 {
                     throw new InvalidDataException("Directory junctions and symbolic links are not supported in coexistence installations.");
                 }

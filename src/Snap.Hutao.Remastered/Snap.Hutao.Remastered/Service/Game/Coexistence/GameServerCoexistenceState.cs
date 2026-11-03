@@ -19,9 +19,13 @@ public sealed record GameServerCoexistenceState
     public required List<string> SharedFiles { get; init; }
 
     public bool CreationPending { get; init; }
+
+    // Format 2 uses independent ReFS files inside this managed VHDX.
+    public string? VirtualDiskImage { get; init; }
 }
 
 [JsonSerializable(typeof(GameServerCoexistenceState))]
+[JsonSerializable(typeof(GameVirtualDiskInfo))]
 internal sealed partial class GameServerCoexistenceJsonContext : JsonSerializerContext
 {
 }

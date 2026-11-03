@@ -16,10 +16,6 @@ public sealed class GamePackageOperationContext
 {
     public GameInstallationInfo? InstallationAtPreparation { get; init; }
 
-    public bool DisableCoexistenceForRepair { get; init; }
-
-    public Action? CoexistenceDisabled { get; init; }
-
     public GamePackageOperationContext(IServiceProvider serviceProvider, GamePackageOperationKind kind, IGameFileSystem gameFileSystem, string? extractDirectory = default)
     {
         Kind = kind;

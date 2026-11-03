@@ -48,9 +48,10 @@ public sealed partial class GameServerCoexistenceService
             await EnsureGameStoppedAsync().ConfigureAwait(false);
             GameInstallationInfo installation = InspectInstallation(executable);
             string root = GameServerCoexistenceStorage.GetRoot(executable);
-            string targetExecutable = GameServerCoexistenceStorage.GetGeneratedExecutable(executable);
+            GameVirtualDiskInfo layout = GameCoexistenceVirtualDisk.GetLayout(executable);
+            string targetExecutable = installation.IsOversea ? layout.ChineseExecutable : layout.OverseaExecutable;
             string targetRoot = GameServerCoexistenceStorage.GetRoot(targetExecutable);
-            if (GameServerCoexistenceStorage.ReadState(root) is not null || Directory.Exists(targetRoot))
+            if (GameServerCoexistenceStorage.ReadState(root) is not null || GameCoexistenceVirtualDisk.Find(executable) is not null || Directory.Exists(layout.Container))
             {
                 throw HutaoException.InvalidOperation(SH.GameCoexistenceDestinationExists);
             }
@@ -75,8 +76,13 @@ public sealed partial class GameServerCoexistenceService
                 throw HutaoException.InvalidOperation(SH.GameCoexistenceInstallationInvalid);
             }
 
+            IReadOnlyList<string> files = GameServerCoexistenceStorage.GetSourceFiles(executable);
+            long sourceBytes = files.Sum(file => new FileInfo(file).Length);
+            GameVirtualDiskInfo disk = await GameCoexistenceVirtualDisk.CreateAsync(executable, sourceBytes, token).ConfigureAwait(false);
+            await GameServerCoexistenceStorage.CopyBaseToVirtualDiskAsync(executable, disk, files, progress, token).ConfigureAwait(false);
+            string virtualSource = installation.IsOversea ? disk.OverseaExecutable : disk.ChineseExecutable;
             using HttpClient httpClient = scope.ServiceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(GamePackageService.HttpClientName);
-            using IGameFileSystem sourceFileSystem = GameFileSystem.CreateForPackageOperation(executable);
+            using IGameFileSystem sourceFileSystem = GameFileSystem.CreateForPackageOperation(virtualSource);
             using IGameFileSystem targetFileSystem = GameFileSystem.CreateForPackageOperation(targetExecutable);
             IPackageConverter converter = scope.ServiceProvider.GetRequiredService<IPackageConverter>();
             PackageConverterContext context = new(current, target, sourceFileSystem)
@@ -109,6 +115,13 @@ public sealed partial class GameServerCoexistenceService
         using (AcquireExclusiveAccess())
         {
             await EnsureGameStoppedAsync().ConfigureAwait(false);
+            GameVirtualDiskInfo? disk = GameCoexistenceVirtualDisk.Find(executable)
+                ?? GameCoexistenceVirtualDisk.ReadDescriptor(GameCoexistenceVirtualDisk.GetContainer(executable));
+            if (disk is not null)
+            {
+                await GameCoexistenceVirtualDisk.EnsureMountedAsync(disk, token).ConfigureAwait(false);
+                executable = disk.ChineseExecutable;
+            }
             await GameServerCoexistenceStorage.UnpairAsync(GameServerCoexistenceStorage.GetRoot(executable), progress, token).ConfigureAwait(false);
         }
     }

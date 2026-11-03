@@ -2,6 +2,7 @@
 // Licensed under the MIT license.
 
 using Snap.Hutao.Remastered.Service.Game.Package.Advanced;
+using Snap.Hutao.Remastered.Service.Game.Coexistence;
 
 namespace Snap.Hutao.Remastered.Service.Game.FileSystem;
 
@@ -24,11 +25,22 @@ public sealed partial class GameFileSystem : IGameFileSystem
 
     public static IGameFileSystem Create(string gameFilePath, AsyncReaderWriterLock.Releaser releaser)
     {
+        try
+        {
+            GameCoexistenceVirtualDisk.AssertMounted(gameFilePath);
+        }
+        catch
+        {
+            releaser.Dispose();
+            throw;
+        }
+
         return new GameFileSystem(gameFilePath, releaser);
     }
 
     public static IGameFileSystem CreateForPackageOperation(string gameFilePath, GameAudioInstallation? gameAudioSystem = default)
     {
+        GameCoexistenceVirtualDisk.AssertMounted(gameFilePath);
         return new PackageOperationGameFileSystem(gameFilePath, gameAudioSystem);
     }
 
