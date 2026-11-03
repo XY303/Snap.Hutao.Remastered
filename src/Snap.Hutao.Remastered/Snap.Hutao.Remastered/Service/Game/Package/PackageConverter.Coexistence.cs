@@ -36,6 +36,17 @@ public sealed partial class PackageConverter
 
         string sourceRoot = context.GameFileSystem.GameDirectory;
         string targetRoot = GameServerCoexistenceStorage.GetRoot(targetExecutable);
+        // Do not validate/reuse local launcher inventories, even when both remote hashes
+        // match. Excluding them from the source makes the converter download all target
+        // chunks and also prevents the later common-file path from copying local metadata.
+        foreach (SophonDecodedManifest manifest in current.Manifests)
+        {
+            foreach (AssetProperty inventory in manifest.Data.Assets.Where(asset => GameServerCoexistenceStorage.IsPackageInventory(asset.AssetName)).ToList())
+            {
+                manifest.Data.Assets.Remove(inventory);
+            }
+        }
+
         List<AssetProperty> currentAssets = current.Manifests.SelectMany(manifest => manifest.Data.Assets).ToList();
         List<AssetProperty> targetAssets = target.Manifests.SelectMany(manifest => manifest.Data.Assets).ToList();
         // Validate all remote paths before they can be used by the conversion cache.

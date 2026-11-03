@@ -69,6 +69,34 @@ public sealed class GameCoexistenceManifestTest
     }
 
     [TestMethod]
+    [DataRow("pkg_version")]
+    [DataRow("Audio_Chinese_pkg_version")]
+    [DataRow("Audio_English(US)_pkg_version")]
+    [DataRow("Audio_Japanese_pkg_version")]
+    [DataRow("Audio_Korean_pkg_version")]
+    public async Task MutableRootInventoriesUseVerifiedTargetContent(string name)
+    {
+        Assert.IsTrue(GameServerCoexistenceStorage.IsPackageInventory(name));
+        string local = Path.Combine(GameServerCoexistenceStorage.GetRoot(sourceExecutable), name);
+        File.WriteAllText(local, "launcher-rewritten inventory, not the published bytes");
+        GameCoexistenceAsset executable = Asset("GenshinImpact.exe", "cache/exe", "exe");
+        GameCoexistenceAsset inventory = Asset(name, "cache/target-inventory", "verified target inventory");
+        await GameServerCoexistenceStorage.CreateFromManifestAsync(sourceExecutable, targetExecutable, [executable, inventory], () => Task.CompletedTask);
+        Assert.AreEqual("verified target inventory", File.ReadAllText(Target(name)));
+        Assert.AreEqual("launcher-rewritten inventory, not the published bytes", File.ReadAllText(local));
+        Assert.AreEqual(1U, GameServerCoexistenceStorage.GetLinkCount(local));
+    }
+
+    [TestMethod]
+    [DataRow("YuanShen_Data/StreamingAssets/Audio_Chinese_pkg_version")]
+    [DataRow("StreamingAssets/a.pck")]
+    [DataRow("Audio_Chinese_pkg_version.blk")]
+    public void InventoryExceptionDoesNotApplyToPayloadPaths(string name)
+    {
+        Assert.IsFalse(GameServerCoexistenceStorage.IsPackageInventory(name));
+    }
+
+    [TestMethod]
     public async Task CorruptSourceCannotBecomeLaunchable()
     {
         GameCoexistenceAsset executable = Asset("GenshinImpact.exe", "cache/exe", "executable");

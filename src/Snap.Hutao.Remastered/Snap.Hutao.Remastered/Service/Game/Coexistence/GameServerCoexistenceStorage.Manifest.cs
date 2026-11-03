@@ -12,6 +12,15 @@ public sealed record GameCoexistenceAsset(string Name, string SourcePath, long S
 
 public static partial class GameServerCoexistenceStorage
 {
+    public static bool IsPackageInventory(string name)
+    {
+        // Launcher-maintained inventories are mutable metadata, not reusable chunk input.
+        // Restrict the exception to installation-root inventories; payload hashes stay strict.
+        return !name.Contains('/') && !name.Contains('\\')
+            && (name.Equals("pkg_version", StringComparison.OrdinalIgnoreCase)
+                || name.EndsWith("_pkg_version", StringComparison.OrdinalIgnoreCase));
+    }
+
     public static string GetGeneratedExecutable(string executable)
     {
         string root = GetRoot(executable);
