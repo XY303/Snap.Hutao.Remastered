@@ -17,6 +17,11 @@ public sealed class LaunchExecutionChannelOptionsHandler : AbstractLaunchExecuti
 {
     public override ValueTask BeforeAsync(BeforeLaunchExecutionContext context)
     {
+        if (GameServerCoexistenceStorage.ReadState(context.FileSystem.GameDirectory) is { CreationPending: true })
+        {
+            throw HutaoException.InvalidOperation(SH.GameCoexistenceCreationPending);
+        }
+
         if (GameServerCoexistenceStorage.ReadState(context.FileSystem.GameDirectory) is not null
             && (context.TargetScheme.IsOversea != context.FileSystem.IsExecutableOversea
                 || context.TargetScheme.Channel is not ChannelType.Official

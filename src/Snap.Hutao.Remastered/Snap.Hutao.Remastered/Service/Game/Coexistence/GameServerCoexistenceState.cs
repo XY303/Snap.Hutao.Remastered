@@ -17,6 +17,8 @@ public sealed record GameServerCoexistenceState
     // Paths are relative to each installation's _Data directory, never absolute.
     // Written BEFORE linking, so interrupted operations can still be detached.
     public required List<string> SharedFiles { get; init; }
+
+    public bool CreationPending { get; init; }
 }
 
 [JsonSerializable(typeof(GameServerCoexistenceState))]

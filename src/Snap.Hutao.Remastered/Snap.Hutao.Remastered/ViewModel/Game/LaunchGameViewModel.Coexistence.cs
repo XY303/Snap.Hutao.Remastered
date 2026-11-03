@@ -2,9 +2,7 @@
 // Licensed under the MIT license.
 
 using Microsoft.UI.Xaml.Controls;
-using Snap.Hutao.Remastered.Core.IO;
 using Snap.Hutao.Remastered.Factory.ContentDialog;
-using Snap.Hutao.Remastered.Factory.Picker;
 using Snap.Hutao.Remastered.Service.Game.Coexistence;
 using Snap.Hutao.Remastered.Service.Notification;
 
@@ -34,7 +32,7 @@ public sealed partial class LaunchGameViewModel
                 await taskContext.SwitchToBackgroundAsync();
                 if (GameServerCoexistenceStorage.ReadState(GameServerCoexistenceStorage.GetRoot(executable)) is { } state)
                 {
-                    status = SH.FormatGameCoexistenceAssociated(state.ChineseExecutable, state.OverseaExecutable);
+                    status = state.CreationPending ? SH.GameCoexistenceCreationPending : SH.FormatGameCoexistenceAssociated(state.ChineseExecutable, state.OverseaExecutable);
                 }
             }
         }
@@ -51,16 +49,16 @@ public sealed partial class LaunchGameViewModel
         }
     }
 
-    [Command("PairGameServersCommand")]
-    private Task PairGameServersAsync()
+    [Command("CreateCoexistingServerCommand")]
+    private Task CreateCoexistingServerAsync()
     {
-        return RunCoexistenceOperationAsync(pair: true);
+        return RunCoexistenceOperationAsync(create: true);
     }
 
     [Command("UnpairGameServersCommand")]
     private Task UnpairGameServersAsync()
     {
-        return RunCoexistenceOperationAsync(pair: false);
+        return RunCoexistenceOperationAsync(create: false);
     }
 
     [Command("CancelCoexistenceCommand")]
@@ -76,7 +74,7 @@ public sealed partial class LaunchGameViewModel
         }
     }
 
-    private async Task RunCoexistenceOperationAsync(bool pair)
+    private async Task RunCoexistenceOperationAsync(bool create)
     {
         await taskContext.SwitchToMainThreadAsync();
         if (IsCoexistenceBusy)
@@ -97,19 +95,11 @@ public sealed partial class LaunchGameViewModel
 
             IContentDialogFactory dialogs = serviceProvider.GetRequiredService<IContentDialogFactory>();
             GameServerCoexistenceService coexistence = serviceProvider.GetRequiredService<GameServerCoexistenceService>();
-            string? otherExecutable = null;
-            if (pair)
+            if (create)
             {
                 await taskContext.SwitchToBackgroundAsync();
-                (bool picked, ValueFile file) = fileSystemPickerInteraction.PickFile(SH.GameCoexistenceSelectInstallation, "Game", "*.exe");
-                if (!picked)
-                {
-                    return;
-                }
-
-                otherExecutable = file;
+                string otherExecutable = GameServerCoexistenceStorage.GetGeneratedExecutable(executable);
                 GameServerCoexistenceService.InspectInstallation(executable);
-                GameServerCoexistenceService.InspectInstallation(otherExecutable);
                 if (await dialogs.CreateForConfirmCancelAsync(SH.GameCoexistenceRiskTitle, SH.GameCoexistenceRiskDescription).ConfigureAwait(false) is not ContentDialogResult.Primary)
                 {
                     return;
@@ -134,9 +124,9 @@ public sealed partial class LaunchGameViewModel
             Progress<string> progress = new(path => CoexistenceStatus = SH.FormatGameCoexistenceProcessing(path));
             CoexistenceStatus = SH.GameCoexistencePreparing;
             string completion;
-            if (pair)
+            if (create)
             {
-                (int files, long bytes) = await coexistence.ShareAsync(executable, otherExecutable!, progress, cancellation.Token).ConfigureAwait(false);
+                (int files, long bytes) = await coexistence.CreateAsync(executable, progress, cancellation.Token).ConfigureAwait(false);
                 completion = SH.FormatGameCoexistenceCompleted(files, (bytes / (1024D * 1024D * 1024D)).ToString("F2"));
             }
             else

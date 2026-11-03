@@ -61,7 +61,7 @@ public static partial class GameServerCoexistenceStorage
 
         string target = targetOversea ? state.OverseaExecutable : state.ChineseExecutable;
         GameServerCoexistenceState? peer = ReadState(GetRoot(target));
-        if (peer is null || peer.PairId != state.PairId || !SamePair(state, peer) || !File.Exists(target))
+        if (state.CreationPending || peer is null || peer.CreationPending || peer.PairId != state.PairId || !SamePair(state, peer) || !File.Exists(target))
         {
             throw new InvalidDataException("The paired installation is unavailable or its journal does not match. Restore independent files before continuing.");
         }

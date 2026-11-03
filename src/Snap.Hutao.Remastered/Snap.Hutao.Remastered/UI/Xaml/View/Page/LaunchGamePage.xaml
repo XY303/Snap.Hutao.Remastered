@@ -588,8 +588,8 @@
                                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                                     <Button
                                                         IsEnabled="{x:Bind ((shvg:LaunchGameViewModel)DataContext).IsCoexistenceBusy, Converter={StaticResource BoolNegationConverter}, Mode=OneWay}"
-                                                        Command="{x:Bind ((shvg:LaunchGameViewModel)DataContext).PairGameServersCommand, Mode=OneWay}"
-                                                        Content="{shuxm:ResourceString Name=GameCoexistencePairButton}"/>
+                                                        Command="{x:Bind ((shvg:LaunchGameViewModel)DataContext).CreateCoexistingServerCommand, Mode=OneWay}"
+                                                        Content="{shuxm:ResourceString Name=GameCoexistenceCreateButton}"/>
                                                     <Button
                                                         IsEnabled="{x:Bind ((shvg:LaunchGameViewModel)DataContext).IsCoexistenceBusy, Converter={StaticResource BoolNegationConverter}, Mode=OneWay}"
                                                         Command="{x:Bind ((shvg:LaunchGameViewModel)DataContext).UnpairGameServersCommand, Mode=OneWay}"

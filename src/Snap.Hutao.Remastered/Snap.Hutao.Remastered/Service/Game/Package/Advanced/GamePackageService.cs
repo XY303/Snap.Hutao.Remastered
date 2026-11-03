@@ -145,6 +145,11 @@ public sealed partial class GamePackageService : IGamePackageService
                         try
                         {
                             GameServerCoexistenceState? coexistence = GameServerCoexistenceStorage.ReadState(operationContext.EffectiveGameDirectory);
+                            if (coexistence is { CreationPending: true })
+                            {
+                                throw new InvalidOperationException(SH.GameCoexistenceCreationPending);
+                            }
+
                             if (coexistence is not null && await GameLifeCycle.IsGameRunningAsync(taskContext).ConfigureAwait(false))
                             {
                                 throw new InvalidOperationException(SH.ServiceGameLaunchExecutionGameIsRunning);

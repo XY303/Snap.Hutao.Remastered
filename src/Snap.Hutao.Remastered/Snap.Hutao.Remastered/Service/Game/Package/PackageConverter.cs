@@ -38,7 +38,11 @@ public sealed partial class PackageConverter : IPackageConverter
 
     public async ValueTask EnsureDeprecatedFilesAndSDKAsync(PackageConverterDeprecationContext context)
     {
-        await GameServerCoexistenceStorage.DetachAsync(context.GameFileSystem.GameDirectory).ConfigureAwait(false);
+        if (!context.PreserveSharedFiles)
+        {
+            await GameServerCoexistenceStorage.DetachAsync(context.GameFileSystem.GameDirectory).ConfigureAwait(false);
+        }
+
         // Just try to delete these files, always download from server when needed
         string gameDirectory = context.GameFileSystem.GameDirectory;
         FileOperation.Delete(Path.Combine(gameDirectory, GameConstants.YuanShenData, "Plugins\\PCGameSDK.dll"));
@@ -53,7 +57,14 @@ public sealed partial class PackageConverter : IPackageConverter
         {
             using (Stream sdkWebStream = await context.HttpClient.GetStreamAsync(context.GameChannelSdk.ChannelSdkPackage.Url).ConfigureAwait(false))
             {
-                await ZipFile.ExtractToDirectoryAsync(sdkWebStream, gameDirectory, true).ConfigureAwait(false);
+                if (context.PreserveSharedFiles)
+                {
+                    await GameServerCoexistenceStorage.ExtractSdkAsync(sdkWebStream, gameDirectory).ConfigureAwait(false);
+                }
+                else
+                {
+                    await ZipFile.ExtractToDirectoryAsync(sdkWebStream, gameDirectory, true).ConfigureAwait(false);
+                }
             }
         }
 
@@ -61,8 +72,18 @@ public sealed partial class PackageConverter : IPackageConverter
         {
             foreach (DeprecatedFile file in context.DeprecatedFiles.DeprecatedFiles)
             {
-                string filePath = Path.Combine(gameDirectory, file.Name);
-                FileOperation.Move(filePath, $"{filePath}.backup", true);
+                string filePath = context.PreserveSharedFiles ? GameServerCoexistenceStorage.ResolveManifestPath(gameDirectory, file.Name) : Path.Combine(gameDirectory, file.Name);
+                if (context.PreserveSharedFiles && File.Exists(filePath))
+                {
+                    // A moved hard link would otherwise escape the recovery journal.
+                    string backup = GameServerCoexistenceStorage.ResolveManifestPath(gameDirectory, file.Name + ".backup");
+                    File.Copy(filePath, backup, true);
+                    File.Delete(filePath);
+                }
+                else
+                {
+                    FileOperation.Move(filePath, $"{filePath}.backup", true);
+                }
             }
         }
     }
@@ -156,8 +177,8 @@ public sealed partial class PackageConverter : IPackageConverter
         static bool IsSameAsset(AssetProperty currentAsset, AssetProperty targetAsset)
         {
             // Ignore YuanShen_Data/ or GenshinImpact_Data/
-            string currentAssetName = currentAsset.AssetName[(currentAsset.AssetName.IndexOf('/', StringComparison.OrdinalIgnoreCase) + 1)..];
-            string targetAssetName = targetAsset.AssetName[(targetAsset.AssetName.IndexOf('/', StringComparison.OrdinalIgnoreCase) + 1)..];
+            string currentAssetName = NormalizeAssetName(currentAsset.AssetName);
+            string targetAssetName = NormalizeAssetName(targetAsset.AssetName);
             return currentAssetName.Equals(targetAssetName, StringComparison.OrdinalIgnoreCase);
         }
     }
@@ -204,7 +225,7 @@ public sealed partial class PackageConverter : IPackageConverter
             {
                 fileStream.Position = 0;
 
-                using (Stream webStream = await context.HttpClient.GetStreamAsync(sophonChunk.ChunkDownloadUrl).ConfigureAwait(false))
+                using (Stream webStream = await context.HttpClient.GetStreamAsync(sophonChunk.ChunkDownloadUrl, context.ParallelOptions.CancellationToken).ConfigureAwait(false))
                 {
                     using (StreamCopyWorker<PackageConvertStatus> worker = new(webStream, fileStream, (_, totalBytesRead) => new PackageConvertStatus(sophonChunk.AssetChunk.ChunkName, totalBytesRead, sophonChunk.AssetChunk.ChunkSize)))
                     {
@@ -272,7 +293,7 @@ public sealed partial class PackageConverter : IPackageConverter
         }
     }
 
-    private async ValueTask<SophonDecodedBuild?> DecodeManifestsAsync(PackageConverterContext context, BranchWrapper branch, LaunchScheme scheme)
+    private async ValueTask<SophonDecodedBuild?> DecodeManifestsAsync(PackageConverterContext context, BranchWrapper branch, LaunchScheme scheme, bool includeInstalledAudio = false)
     {
         SophonBuild? build;
         using (IServiceScope scope = serviceProvider.CreateScope())
@@ -288,26 +309,51 @@ public sealed partial class PackageConverter : IPackageConverter
             }
         }
 
-        SophonManifest sophonManifest = build.Manifests.Single(m => m.MatchingField == "game");
-        string manifestDownloadUrl = $"{sophonManifest.ManifestDownload.UrlPrefix}/{sophonManifest.Manifest.Id}";
-        using (Stream rawManifestStream = await context.HttpClient.GetStreamAsync(manifestDownloadUrl).ConfigureAwait(false))
+        HashSet<string> required = new(StringComparer.Ordinal) { "game" };
+        if (includeInstalledAudio)
         {
-            using (ZstandardDecompressStream decompressor = new(rawManifestStream))
+            if (context.GameFileSystem.Audio.Chinese)
             {
-                using (MemoryStream inMemoryManifestStream = await memoryStreamFactory.GetStreamAsync(decompressor).ConfigureAwait(false))
-                {
-                    string manifestMd5 = await Hash.ToHexStringAsync(HashAlgorithmName.MD5, inMemoryManifestStream).ConfigureAwait(false);
-                    if (!manifestMd5.Equals(sophonManifest.Manifest.Checksum, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return default!;
-                    }
-
-                    inMemoryManifestStream.Position = 0;
-                    SophonDecodedManifest decodedManifest = new(sophonManifest.ChunkDownload.UrlPrefix, sophonManifest.ChunkDownload.UrlSuffix, SophonManifestProto.Parser.ParseFrom(inMemoryManifestStream));
-                    return new(build.Tag, sophonManifest.Stats.CompressedSize, sophonManifest.Stats.UncompressedSize, [decodedManifest]);
-                }
+                required.Add("zh-cn");
+            }
+            if (context.GameFileSystem.Audio.English)
+            {
+                required.Add("en-us");
+            }
+            if (context.GameFileSystem.Audio.Japanese)
+            {
+                required.Add("ja-jp");
+            }
+            if (context.GameFileSystem.Audio.Korean)
+            {
+                required.Add("ko-kr");
             }
         }
+
+        List<SophonManifest> manifests = build.Manifests.Where(manifest => required.Contains(manifest.MatchingField)).OrderBy(manifest => manifest.MatchingField, StringComparer.Ordinal).ToList();
+        if (manifests.Count != required.Count || !required.SetEquals(manifests.Select(manifest => manifest.MatchingField)))
+        {
+            throw new InvalidDataException("The server build is missing a required game or installed audio manifest.");
+        }
+
+        List<SophonDecodedManifest> decoded = [];
+        foreach (SophonManifest sophonManifest in manifests)
+        {
+            string manifestDownloadUrl = $"{sophonManifest.ManifestDownload.UrlPrefix}/{sophonManifest.Manifest.Id}?{sophonManifest.ManifestDownload.UrlSuffix}";
+            using Stream rawManifestStream = await context.HttpClient.GetStreamAsync(manifestDownloadUrl, context.ParallelOptions.CancellationToken).ConfigureAwait(false);
+            using ZstandardDecompressStream decompressor = new(rawManifestStream);
+            using MemoryStream inMemoryManifestStream = await memoryStreamFactory.GetStreamAsync(decompressor).ConfigureAwait(false);
+            string manifestMd5 = await Hash.ToHexStringAsync(HashAlgorithmName.MD5, inMemoryManifestStream).ConfigureAwait(false);
+            if (!manifestMd5.Equals(sophonManifest.Manifest.Checksum, StringComparison.OrdinalIgnoreCase))
+            {
+                return default;
+            }
+
+            inMemoryManifestStream.Position = 0;
+            decoded.Add(new(sophonManifest.ChunkDownload.UrlPrefix, sophonManifest.ChunkDownload.UrlSuffix, SophonManifestProto.Parser.ParseFrom(inMemoryManifestStream)));
+        }
+
+        return new(build.Tag, manifests.Sum(manifest => manifest.Stats.CompressedSize), manifests.Sum(manifest => manifest.Stats.UncompressedSize), [.. decoded]);
     }
 
     private async ValueTask PrepareCacheFilesAsync(PackageConverterContext context, List<PackageItemOperationForSophonChunks> operations)
