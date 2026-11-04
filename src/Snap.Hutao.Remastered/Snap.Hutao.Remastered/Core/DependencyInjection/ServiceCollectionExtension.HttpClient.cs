@@ -136,7 +136,7 @@ public static partial class ServiceCollectionExtension
         client.Timeout = Timeout.InfiniteTimeSpan;
         client.DefaultRequestHeaders.UserAgent.ParseAdd(HoyolabOptions.HoyoPlayUserAgent);
         client.DefaultRequestHeaders.Accept.ParseAdd(MediaTypeNames.Application.Json);
-        client.DefaultRequestHeaders.Add("x-rpc-app_id", "ddxf6vlr1reo");
+        client.DefaultRequestHeaders.Add("x-rpc-app_id", HoyolabOptions.HoyoPlayAppIdOversea);
         client.DefaultRequestHeaders.Add("x-rpc-client_type", "3");
         client.DefaultRequestHeaders.Add("x-rpc-device_id", HoyolabOptions.DeviceId53);
     }

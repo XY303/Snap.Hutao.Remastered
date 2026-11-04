@@ -29,6 +29,6 @@ public sealed class GenAuthKeyData
 
     public static GenAuthKeyData CreateForWebViewGacha(PlayerUid uid)
     {
-        return new("webview_gacha", "hk4e_cn", uid);
+        return new("webview_gacha", uid.Region.IsOversea() ? "hk4e_global" : "hk4e_cn", uid);
     }
 }
