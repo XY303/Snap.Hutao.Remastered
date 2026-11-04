@@ -13,6 +13,7 @@ namespace Snap.Hutao.Remastered.Service.GachaLog.QueryProvider;
 public sealed partial class GachaLogQuerySTokenProvider : IGachaLogQueryProvider
 {
     private readonly BindingClient2 bindingClient2;
+    private readonly BindingClientOversea bindingClientOversea;
     private readonly CultureOptions cultureOptions;
     private readonly IUserService userService;
     private readonly IMessenger messenger;
@@ -27,15 +28,12 @@ public sealed partial class GachaLogQuerySTokenProvider : IGachaLogQueryProvider
             return new(false, GachaLogQuery.Invalid(SH.MustSelectUserAndUid));
         }
 
-        if (userAndUid.IsOversea)
-        {
-            return new(false, GachaLogQuery.Invalid(SH.ServiceGachaLogUrlProviderStokenUnsupported));
-        }
-
         GenAuthKeyData data = GenAuthKeyData.CreateForWebViewGacha(userAndUid.Uid);
-        Response<GameAuthKey> authKeyResponse = await bindingClient2.GenerateAuthenticationKeyAsync(userAndUid.User, data).ConfigureAwait(false);
+        Response<GameAuthKey> authKeyResponse = userAndUid.IsOversea
+            ? await bindingClientOversea.GenerateAuthenticationKeyAsync(userAndUid.User, data).ConfigureAwait(false)
+            : await bindingClient2.GenerateAuthenticationKeyAsync(userAndUid.User, data).ConfigureAwait(false);
 
-        if (!ResponseValidator.TryValidate(authKeyResponse, messenger, out GameAuthKey? authKey))
+        if (!ResponseValidator.TryValidate(authKeyResponse, messenger, out GameAuthKey? authKey) || string.IsNullOrEmpty(authKey.AuthKey))
         {
             return new(false, GachaLogQuery.Invalid(SH.ServiceGachaLogUrlProviderAuthkeyRequestFailed));
         }
@@ -50,7 +48,9 @@ public sealed partial class GachaLogQuerySTokenProvider : IGachaLogQueryProvider
         NameValueCollection collection = HttpUtility.ParseQueryString(string.Empty);
         collection.Set("lang", lang);
         collection.Set("auth_appid", genAuthKeyData.AuthAppId);
-        collection.Set("authkey", gameAuthKey.AuthKey);
+        collection.Set("game_biz", genAuthKeyData.GameBiz);
+        collection.Set("region", genAuthKeyData.Region.Value);
+        collection.Set("authkey", genAuthKeyData.Region.IsOversea() ? Uri.UnescapeDataString(gameAuthKey.AuthKey) : gameAuthKey.AuthKey);
         collection.Set("authkey_ver", $"{gameAuthKey.AuthKeyVersion:D}");
         collection.Set("sign_type", $"{gameAuthKey.SignType:D}");
 

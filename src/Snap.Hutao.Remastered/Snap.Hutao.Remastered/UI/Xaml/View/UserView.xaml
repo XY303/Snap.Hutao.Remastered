@@ -371,6 +371,7 @@
                     </Button.Content>
                     <Button.Flyout>
                         <Flyout
+                            shuxb:DismissFlyoutOnDialog.IsEnabled="True"
                             essential:FlyoutHelper.AcrylicWorkaround="True"
                             FlyoutPresenterStyle="{ThemeResource FlyoutPresenterPadding0Style}"
                             LightDismissOverlayMode="On"
@@ -397,6 +398,7 @@
                                         Label="{shuxm:ResourceString Name=ViewUserCookieOperation}">
                                         <AppBarButton.Flyout>
                                             <Flyout
+                                                shuxb:DismissFlyoutOnDialog.IsEnabled="True"
                                                 essential:FlyoutHelper.AcrylicWorkaround="True"
                                                 FlyoutPresenterStyle="{ThemeResource FlyoutPresenterPadding2Style}"
                                                 Placement="Right">
@@ -435,6 +437,7 @@
                                         Label="{shuxm:ResourceString Name=ViewUserCookieOperation2}">
                                         <AppBarButton.Flyout>
                                             <Flyout
+                                                shuxb:DismissFlyoutOnDialog.IsEnabled="True"
                                                 essential:FlyoutHelper.AcrylicWorkaround="True"
                                                 FlyoutPresenterStyle="{ThemeResource FlyoutPresenterPadding2Style}"
                                                 Placement="Right">
@@ -605,6 +608,7 @@
                     </wl:LiquidGlassButton.Content>
                     <wl:LiquidGlassButton.Flyout>
                         <Flyout
+                            shuxb:DismissFlyoutOnDialog.IsEnabled="True"
                             essential:FlyoutHelper.AcrylicWorkaround="True"
                             FlyoutPresenterStyle="{ThemeResource FlyoutPresenterPadding0Style}"
                             LightDismissOverlayMode="On"
@@ -631,6 +635,7 @@
                                         Label="{shuxm:ResourceString Name=ViewUserCookieOperation}">
                                         <AppBarButton.Flyout>
                                             <Flyout
+                                                shuxb:DismissFlyoutOnDialog.IsEnabled="True"
                                                 essential:FlyoutHelper.AcrylicWorkaround="True"
                                                 FlyoutPresenterStyle="{ThemeResource FlyoutPresenterPadding2Style}"
                                                 Placement="Right">
@@ -669,6 +674,7 @@
                                         Label="{shuxm:ResourceString Name=ViewUserCookieOperation2}">
                                         <AppBarButton.Flyout>
                                             <Flyout
+                                                shuxb:DismissFlyoutOnDialog.IsEnabled="True"
                                                 essential:FlyoutHelper.AcrylicWorkaround="True"
                                                 FlyoutPresenterStyle="{ThemeResource FlyoutPresenterPadding2Style}"
                                                 Placement="Right">

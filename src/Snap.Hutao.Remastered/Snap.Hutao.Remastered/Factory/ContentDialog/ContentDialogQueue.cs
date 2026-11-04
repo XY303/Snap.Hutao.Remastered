@@ -4,6 +4,7 @@
 using Microsoft.UI.Xaml.Controls;
 using Snap.Hutao.Remastered.Core.ExceptionService;
 using Snap.Hutao.Remastered.Core.LifeCycle;
+using Snap.Hutao.Remastered.UI.Xaml.Behavior;
 using Windows.Foundation;
 
 namespace Snap.Hutao.Remastered.Factory.ContentDialog;
@@ -71,6 +72,8 @@ public sealed partial class ContentDialogQueue : IContentDialogQueue
                 // And that's why we didn't use dialog's DispatcherQueue to switch thread either.
                 HutaoException.NotSupported("Dialog using different XamlRoot");
             }
+
+            await DismissFlyoutOnDialog.HideAsync(contentDialog.XamlRoot);
 
             IAsyncOperation<ContentDialogResult> operation = contentDialog.ShowAsync();
             contentDialog.Focus(Microsoft.UI.Xaml.FocusState.Programmatic);

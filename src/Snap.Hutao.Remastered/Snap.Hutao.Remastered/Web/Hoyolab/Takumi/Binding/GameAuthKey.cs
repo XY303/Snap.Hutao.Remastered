@@ -9,8 +9,8 @@ public sealed class GameAuthKey
     public string AuthKey { get; set; } = default!;
 
     [JsonPropertyName("authkey_ver")]
-    public int AuthKeyVersion { get; set; } = default!;
+    public int AuthKeyVersion { get; set; } = 1;
 
     [JsonPropertyName("sign_type")]
-    public int SignType { get; set; } = default!;
+    public int SignType { get; set; } = 2;
 }

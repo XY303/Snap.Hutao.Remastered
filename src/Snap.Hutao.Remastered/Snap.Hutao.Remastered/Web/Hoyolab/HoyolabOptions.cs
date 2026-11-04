@@ -23,6 +23,10 @@ public static class HoyolabOptions
 
     public const string HoyoPlayUserAgent = $"HYPContainer/1.1.4.133";
 
+    public const string HoyoPlayAppIdOversea = "ddxf6vlr1reo";
+
+    public const string HoyolabAppIdOversea = "c9oqaq3s3gu8";
+
     public const string ToolVersion = "v4.2.2-ys";
 
     public static string DeviceId36 { get; } = Guid.NewGuid().ToString();
@@ -47,6 +51,7 @@ public static class HoyolabOptions
         KeyValuePair.Create(SaltType.OSLK2, SaltConstants.OSLK2),
         KeyValuePair.Create(SaltType.OSX4, "h4c1d6ywfq5bsbnbhm1bzq7bxzzv6srt"),
         KeyValuePair.Create(SaltType.OSX6, "okr4obncj8bw5a65hbnn5oo6ixjc3l9w"),
+        KeyValuePair.Create(SaltType.AppLogin, "IZPgfb0dRPtBeLuFkdDznSZ6f4wWt6y2"),
     ]);
 
     [SuppressMessage("", "CA1308")]
