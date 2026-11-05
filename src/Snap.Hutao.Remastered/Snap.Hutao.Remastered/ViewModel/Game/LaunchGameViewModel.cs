@@ -18,6 +18,7 @@ using Snap.Hutao.Remastered.Model.Intrinsic;
 using Snap.Hutao.Remastered.Service.Game;
 using Snap.Hutao.Remastered.Service.Game.AdvancedStart;
 using Snap.Hutao.Remastered.Service.Game.AdvancedStart.Model;
+using Snap.Hutao.Remastered.Service.Game.Coexistence;
 using Snap.Hutao.Remastered.Service.Game.FileSystem;
 using Snap.Hutao.Remastered.Service.Game.Locator;
 using Snap.Hutao.Remastered.Service.Game.Package;
@@ -145,6 +146,18 @@ public sealed partial class LaunchGameViewModel : Abstraction.ViewModel, IViewMo
         {
             using (await EnterCriticalSectionAsync().ConfigureAwait(false))
             {
+                if (GamePathEntry.Value?.Path is { } executable && GameCoexistenceVirtualDisk.Find(executable) is { } disk)
+                {
+                    await GameCoexistenceVirtualDisk.EnsureMountedAsync(disk).ConfigureAwait(false);
+                    await taskContext.SwitchToMainThreadAsync();
+                    LaunchOptions.CoexistenceContainer.Value = disk.Container;
+                    LaunchOptions.CoexistenceEnabled.Value = true;
+                }
+                else if (GamePathEntry.Value is not null)
+                {
+                    await taskContext.SwitchToMainThreadAsync();
+                    LaunchOptions.CoexistenceEnabled.Value = false;
+                }
                 LaunchScheme? currentScheme = GamePathEntry.Value is not null
                     ? Shared.GetCurrentLaunchSchemeFromConfigurationFile()
                     : default;
@@ -155,7 +168,7 @@ public sealed partial class LaunchGameViewModel : Abstraction.ViewModel, IViewMo
                 await RefreshCoexistenceStatusAsync().ConfigureAwait(true);
             }
         }
-        catch (HutaoException ex)
+        catch (Exception ex)
         {
             messenger.Send(InfoBarMessage.Error(ex));
         }
@@ -175,6 +188,7 @@ public sealed partial class LaunchGameViewModel : Abstraction.ViewModel, IViewMo
     private CancellationTokenSource? delayedSaveCts;
     protected override async ValueTask<bool> LoadOverrideAsync(CancellationToken token)
     {
+        serviceProvider.GetRequiredService<GameServerCoexistenceService>().StartAutomaticOptimization();
         GameLifeCycle.ObserveGameRunningAsync(taskContext, token).SafeForget();
         AdvancedStartProgramPath = LocalSetting.Get(SettingKeys.LaunchAdvancedStartProgramPath, string.Empty);
 
@@ -286,13 +300,13 @@ public sealed partial class LaunchGameViewModel : Abstraction.ViewModel, IViewMo
     private async Task PickGamePathAsync()
     {
         SentrySdk.AddBreadcrumb(BreadcrumbFactory.CreateUI("Set game path by picker", "LaunchGameViewModel.Command"));
-        if (await gameLocatorFactory.LocateSingleAsync(GameLocationSourceKind.Manual).ConfigureAwait(false) is not (true, var path))
+        try
         {
-            return;
+            if (await gameLocatorFactory.LocateSingleAsync(GameLocationSourceKind.Manual).ConfigureAwait(false) is not (true, var path)) { return; }
+            await taskContext.SwitchToMainThreadAsync();
+            LaunchOptions.PerformGamePathEntrySynchronization(path);
         }
-
-        await taskContext.SwitchToMainThreadAsync();
-        LaunchOptions.PerformGamePathEntrySynchronization(path);
+        catch (Exception ex) { messenger.Send(InfoBarMessage.Error(SH.GameCoexistenceFailed, ex.Message)); }
     }
 
     [Command("ResetGamePathCommand")]

@@ -18,11 +18,15 @@ $identityPath = Join-Path $identityDirectory 'identity.json'
 $projectDirectory = Join-Path $repository 'src\Snap.Hutao.Remastered\Snap.Hutao.Remastered'
 $manifest = [xml](Get-Content (Join-Path $projectDirectory 'Package.appxmanifest') -Raw)
 $version = [string]$manifest.Package.Identity.Version
+$project = [xml](Get-Content (Join-Path $projectDirectory 'Snap.Hutao.Remastered.csproj') -Raw)
+$suffix = [string]($project.Project.PropertyGroup.VersionSuffix | Where-Object { $_ } | Select-Object -First 1)
+if ($suffix -and $suffix -notmatch '^[A-Za-z0-9]+(?:[.-][A-Za-z0-9]+)*$') { throw 'Invalid release version suffix.' }
+$displayVersion = if ($suffix) { "$version-$suffix" } else { $version }
 $PayloadDirectory = (Resolve-Path -LiteralPath $PayloadDirectory).Path
 $InnoSetupCompiler = (Resolve-Path -LiteralPath $InnoSetupCompiler).Path
 $SignTool = (Resolve-Path -LiteralPath $SignTool).Path
 if (!$OutputDirectory) {
-    $OutputDirectory = Join-Path $repository "artifacts\local-signed-$version"
+    $OutputDirectory = Join-Path $repository "artifacts\local-signed-$displayVersion"
 }
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 $payloadPrefix = $PayloadDirectory.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
@@ -147,7 +151,7 @@ foreach ($file in @('Snap.Hutao.Remastered.exe', 'Snap.Hutao.Remastered.dll')) {
 # Inno's $q/$f placeholders quote the executable and the file being signed.
 $signCommand = '$q' + $SignTool + '$q sign /sha1 ' + $leaf.Thumbprint + ' /s My /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $f'
 $compilerArgs = @(
-    '/Qp', "/DMyAppVersion=$version", '/DMyAppPublisher=XY303',
+    '/Qp', "/DMyAppVersion=$version", "/DMyAppDisplayVersion=$displayVersion", '/DMyAppPublisher=XY303',
     "/DPublishDir=$stage", "/O$OutputDirectory",
     "/DRootCertificatePath=$rootPath", "/DRootCertificateThumbprint=$($root.Thumbprint)",
     '/DSignToolName=LocalSign', "/SLocalSign=$signCommand",
@@ -155,10 +159,10 @@ $compilerArgs = @(
 )
 & $InnoSetupCompiler @compilerArgs
 if ($LASTEXITCODE -ne 0) { throw 'Signed installer compilation failed.' }
-$installer = Join-Path $OutputDirectory "Snap.Hutao.Remastered-$version-Setup.exe"
+$installer = Join-Path $OutputDirectory "Snap.Hutao.Remastered-$displayVersion-Setup.exe"
 Assert-SignedByLocalPublisher $installer
 
-$zipPath = Join-Path $OutputDirectory "Snap.Hutao.Remastered-$version-win-x64.zip"
+$zipPath = Join-Path $OutputDirectory "Snap.Hutao.Remastered-$displayVersion-win-x64.zip"
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zipPath -CompressionLevel Optimal -Force
 $files = @($installer, $zipPath, $rootPath, $leafPath)
 $files | ForEach-Object {

@@ -27,7 +27,7 @@ public sealed partial class GameFileSystem : IGameFileSystem
     {
         try
         {
-            GameCoexistenceVirtualDisk.AssertMounted(gameFilePath);
+            GameCoexistenceVirtualDisk.EnsureMounted(gameFilePath);
             if (GameVersionLibrary.FindEntry(gameFilePath) is { Pending: true })
             {
                 throw new System.IO.IOException("共存版本创建未完成，请选择完整版本。未完成目录可在关闭胡桃后手动清理。");
@@ -44,7 +44,7 @@ public sealed partial class GameFileSystem : IGameFileSystem
 
     public static IGameFileSystem CreateForPackageOperation(string gameFilePath, GameAudioInstallation? gameAudioSystem = default)
     {
-        GameCoexistenceVirtualDisk.AssertMounted(gameFilePath);
+        GameCoexistenceVirtualDisk.EnsureMounted(gameFilePath);
         return new PackageOperationGameFileSystem(gameFilePath, gameAudioSystem);
     }
 

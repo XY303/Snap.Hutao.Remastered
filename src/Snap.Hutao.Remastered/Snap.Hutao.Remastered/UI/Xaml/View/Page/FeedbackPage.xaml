@@ -84,7 +84,7 @@
                         <Border cw:Effects.Shadow="{ThemeResource CompatCardShadow}">
                             <Border Style="{ThemeResource AcrylicBorderCardStyle}">
                                 <cwc:SettingsExpander
-                                    Description="{x:Bind shc:HutaoRuntime.Version}"
+                                    Description="{x:Bind shc:HutaoRuntime.DisplayVersion}"
                                     Header="{shuxm:ResourceString Name=AppName}"
                                     HeaderIcon="{shuxm:FontIcon Glyph=&#xECAA;}"
                                     IsExpanded="True">

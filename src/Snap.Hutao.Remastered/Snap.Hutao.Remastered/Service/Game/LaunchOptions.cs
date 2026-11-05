@@ -45,6 +45,10 @@ public sealed partial class LaunchOptions : DbStoreOptions, IRestrictedGamePathA
 
     public IObservableProperty<string> CoexistenceContainer { get => field ??= CreateProperty(SettingKeys.LaunchCoexistenceContainer, string.Empty); }
 
+    public IObservableProperty<bool> CoexistenceAutoOptimize { get => field ??= CreateProperty(SettingKeys.LaunchCoexistenceAutoOptimize, true); }
+
+    public IObservableProperty<bool> CoexistenceOptimizeDuringGame { get => field ??= CreateProperty(SettingKeys.LaunchCoexistenceOptimizeDuringGame, true); }
+
     public IObservableProperty<bool> AutoSelectServer { get => field ??= CreateProperty(SettingKeys.LaunchAutoSelectServer, false); }
 
     [field: MaybeNull]

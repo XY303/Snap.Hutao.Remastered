@@ -344,6 +344,9 @@ public sealed partial class LaunchGameShared
         GameFileSystemErrorKind errorKind = launchOptions.TryGetGameFileSystem(LockTrace, out IGameFileSystem? gameFileSystem);
         switch (errorKind)
         {
+            case GameFileSystemErrorKind.GamePathUnavailable:
+                messenger.Send(InfoBarMessage.Warning(SH.ViewModelGameConfigurationCreateFailed, "游戏目录不可用，请确认共存镜像存在，并以管理员身份重试自动挂载。"));
+                return;
             case GameFileSystemErrorKind.GamePathLocked:
                 messenger.Send(InfoBarMessage.Warning(SH.ViewModelGameConfigurationCreateFailed, SH.ViewModelGameConfigurationCreateFailedGamePathLocked));
                 return;

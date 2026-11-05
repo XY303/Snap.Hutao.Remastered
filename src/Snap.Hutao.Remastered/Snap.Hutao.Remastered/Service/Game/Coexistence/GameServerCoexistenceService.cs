@@ -127,6 +127,7 @@ public sealed partial class GameServerCoexistenceService
 
     private AsyncReaderWriterLock.Releaser AcquireExclusiveAccess()
     {
+        using IDisposable pause = PauseOptimizationAsync(XamlApplicationLifetime.ShutdownToken).GetAwaiter().GetResult();
         if (!launchOptions.GamePathLock.TryWriterLock(nameof(GameServerCoexistenceService), out AsyncReaderWriterLock.Releaser releaser))
         {
             throw HutaoException.InvalidOperation(SH.GameCoexistenceOperationBusy);

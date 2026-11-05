@@ -12,7 +12,7 @@ public sealed record GameVersionEntry(Guid Id, bool IsOversea, int Channel, int 
     public string GetExecutable(GameVirtualDiskInfo disk) => Path.Combine(disk.MountPath, "versions", Id.ToString("N"), IsOversea ? "GenshinImpact.exe" : "YuanShen.exe");
 }
 
-public sealed record GameVersionLibrary(string OriginalExecutable, List<GameVersionEntry> Entries)
+public sealed record GameVersionLibrary(string OriginalExecutable, List<GameVersionEntry> Entries, bool OriginalCleanupPending = false)
 {
     public IEnumerable<GameVersionEntry> GetReadyEntries(GameVirtualDiskInfo disk, string? selectedExecutable)
         => Entries.AsEnumerable().Reverse().Where(e => !e.Pending)

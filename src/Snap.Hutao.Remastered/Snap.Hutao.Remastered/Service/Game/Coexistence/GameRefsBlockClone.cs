@@ -76,7 +76,7 @@ public static partial class GameRefsBlockClone
 
     // Re-share identical data without replacing file names, attributes or ACLs.
     // Exclusive write sharing and fresh hashes prevent a stale scan from changing data.
-    public static async Task<long> DeduplicateAsync(string sourcePath, string targetPath, string expectedSha256, CancellationToken token)
+    public static async Task<long> DeduplicateAsync(string sourcePath, string targetPath, string expectedSha256, CancellationToken token, bool background = false)
     {
         EnsureReFS(sourcePath);
         if (Path.GetFullPath(sourcePath).Equals(Path.GetFullPath(targetPath), StringComparison.OrdinalIgnoreCase)
@@ -88,8 +88,8 @@ public static partial class GameRefsBlockClone
         using FileStream source = new(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 1024, FileOptions.Asynchronous);
         using FileStream target = new(targetPath, FileMode.Open, FileAccess.ReadWrite, FileShare.Read, 1024 * 1024, FileOptions.Asynchronous);
         if (source.Length != target.Length
-            || !Convert.ToHexString(await SHA256.HashDataAsync(source, token).ConfigureAwait(false)).Equals(expectedSha256, StringComparison.OrdinalIgnoreCase)
-            || !Convert.ToHexString(await SHA256.HashDataAsync(target, token).ConfigureAwait(false)).Equals(expectedSha256, StringComparison.OrdinalIgnoreCase))
+            || !Convert.ToHexString(await GameOptimizationWorker.HashAsync(source, background, token).ConfigureAwait(false)).Equals(expectedSha256, StringComparison.OrdinalIgnoreCase)
+            || !Convert.ToHexString(await GameOptimizationWorker.HashAsync(target, background, token).ConfigureAwait(false)).Equals(expectedSha256, StringComparison.OrdinalIgnoreCase))
         {
             throw new IOException("资源自扫描后发生变化，已停止优化，请重新扫描。");
         }
@@ -99,7 +99,7 @@ public static partial class GameRefsBlockClone
         for (long offset = 0; offset < bytes;)
         {
             token.ThrowIfCancellationRequested();
-            long length = Math.Min(bytes - offset, 1024L * 1024 * 1024) / cluster * cluster;
+            long length = Math.Min(bytes - offset, (background ? 64L : 1024L) * 1024 * 1024) / cluster * cluster;
             DuplicateRange range = new() { Source = source.SafeFileHandle.DangerousGetHandle(), SourceOffset = offset, TargetOffset = offset, Length = length };
             if (!DeviceIoControl(target.SafeFileHandle, 0x00098344, ref range, Marshal.SizeOf<DuplicateRange>(), 0, 0, out _, 0))
             {

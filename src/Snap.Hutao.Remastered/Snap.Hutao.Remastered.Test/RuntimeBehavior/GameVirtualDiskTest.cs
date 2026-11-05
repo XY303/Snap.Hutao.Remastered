@@ -19,8 +19,12 @@ public sealed class GameVirtualDiskTest
         try
         {
             Assert.Throws<InvalidDataException>(() => GameCoexistenceVirtualDisk.AssertMounted(disk.ChineseExecutable));
+            Assert.Throws<InvalidDataException>(() => GameCoexistenceVirtualDisk.EnsureMounted(disk.ChineseExecutable));
+            Assert.IsFalse(Directory.Exists(disk.MountPath));
             File.WriteAllText(Path.Combine(root, GameCoexistenceVirtualDisk.DescriptorName), JsonSerializer.Serialize(disk));
             Assert.AreEqual(disk, GameCoexistenceVirtualDisk.Find(disk.ChineseExecutable));
+            Assert.AreEqual(disk, GameCoexistenceVirtualDisk.FromImagePath(disk.ImagePath));
+            Assert.Throws<InvalidDataException>(() => GameCoexistenceVirtualDisk.FromImagePath(Path.Combine(root, "other.vhdx")));
             Assert.Throws<IOException>(() => GameCoexistenceVirtualDisk.AssertMounted(disk.ChineseExecutable));
             Assert.IsFalse(Directory.Exists(disk.MountPath));
 
@@ -129,7 +133,12 @@ public sealed class GameVirtualDiskTest
 
             await StorageAsync("Dismount-DiskImage -ImagePath " + Quote(disk.ImagePath));
             Assert.Throws<IOException>(() => GameCoexistenceVirtualDisk.AssertMounted(sourceExecutable));
-            await GameCoexistenceVirtualDisk.EnsureMountedAsync(sourceExecutable);
+            // Synchronous filesystem access must recover a detached disk even when
+            // Windows retains its stale volume mount point. Concurrent callers share
+            // the same mount gate rather than adding the access path twice.
+            await Task.WhenAll(
+                Task.Run(() => GameCoexistenceVirtualDisk.EnsureMounted(sourceExecutable)),
+                GameCoexistenceVirtualDisk.EnsureMountedAsync(sourceExecutable));
             GameCoexistenceVirtualDisk.AssertMounted(sourceExecutable);
             CollectionAssert.AreEqual(content, File.ReadAllBytes(source));
             CollectionAssert.AreEqual(targetContent, File.ReadAllBytes(target));
@@ -188,6 +197,12 @@ public sealed class GameVirtualDiskTest
         Assert.AreEqual(0L, shared.ReclaimableBytes);
         File.Delete(thirdFile);
         File.WriteAllBytes(thirdFile, content); // Ordinary independent allocation, not a block clone.
+        using (FileStream busy = new(thirdFile, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            GameSpaceScan live = await GameOptimizationWorker.RunAsync(() => GameSpaceOptimizer.ScanAsync(disk, null, CancellationToken.None, background: true).GetAwaiter().GetResult());
+            Assert.IsGreaterThan(0, live.SkippedFiles);
+            Assert.IsFalse(live.Duplicates.Any(d => d.Target == thirdFile || d.Source == thirdFile));
+        }
         GameSpaceScan scan = await GameSpaceOptimizer.ScanAsync(disk, null, CancellationToken.None);
         Assert.IsGreaterThan(1024L * 1024, scan.ReclaimableBytes, scan.Description + "\n" + JsonSerializer.Serialize(GameRefsBlockClone.GetExtents(firstFile)) + "\n" + JsonSerializer.Serialize(GameRefsBlockClone.GetExtents(thirdFile)) + "\n" + await RunAsync("fsutil.exe", ["file", "queryExtentsAndRefCounts", thirdFile]));
         foreach (GameSpaceDuplicate duplicate in scan.Duplicates)
@@ -254,6 +269,10 @@ public sealed class GameVirtualDiskTest
             string executable = entry.GetExecutable(disk);
             Assert.Throws<InvalidDataException>(() => GameVersionLibrary.FindEntry(executable));
             GameVersionLibrary library = new(Path.Combine(container, "original", "YuanShen.exe"), [entry]);
+            File.WriteAllText(Path.Combine(container, "installations.json"), JsonSerializer.Serialize(new { library.OriginalExecutable, library.Entries }));
+            Assert.IsFalse(GameVersionLibrary.Read(disk).OriginalCleanupPending); // Existing catalogs remain readable.
+            (library with { OriginalCleanupPending = true }).Save(disk);
+            Assert.IsTrue(GameVersionLibrary.Read(disk).OriginalCleanupPending);
             library.Save(disk);
             Assert.IsTrue(GameVersionLibrary.FindEntry(executable)!.Pending);
             Assert.Throws<InvalidDataException>(() => GameVersionLibrary.FindEntry((entry with { Id = Guid.NewGuid() }).GetExecutable(disk)));

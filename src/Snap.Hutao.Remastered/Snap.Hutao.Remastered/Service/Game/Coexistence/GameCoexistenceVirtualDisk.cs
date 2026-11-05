@@ -26,6 +26,18 @@ public static class GameCoexistenceVirtualDisk
 
     public static GameVirtualDiskInfo GetLayout(string sourceExecutable) => new(GetContainer(sourceExecutable), string.Empty);
 
+    public static GameVirtualDiskInfo FromImagePath(string imagePath)
+    {
+        string fullPath = Path.GetFullPath(imagePath);
+        GameVirtualDiskInfo disk = ReadDescriptor(Path.GetDirectoryName(fullPath)!)
+            ?? throw new InvalidDataException("请选择已有胡桃共存库中的 game.vhdx，并保留 virtual-disk.json 和 installations.json。");
+        if (!disk.ImagePath.Equals(fullPath, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException("所选镜像与共存库描述文件不匹配。");
+        }
+        return disk;
+    }
+
     public static GameVirtualDiskInfo? Find(string executable)
     {
         // Discovery works even when the volume is offline: descriptor is on the host.
@@ -83,6 +95,14 @@ public static class GameCoexistenceVirtualDisk
         }
 
         await EnsureMountedAsync(info, token).ConfigureAwait(false);
+    }
+
+    // Synchronous filesystem consumers (including XAML bindings) must also recover
+    // offline volumes. All awaits in the mount implementation avoid the UI context.
+    public static void EnsureMounted(string executable)
+    {
+        EnsureMountedAsync(executable).GetAwaiter().GetResult();
+        AssertMounted(executable);
     }
 
     public static void AssertMounted(string executable)

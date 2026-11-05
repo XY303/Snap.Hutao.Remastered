@@ -295,6 +295,10 @@
                             <TextBlock Foreground="{ThemeResource SystemErrorTextColor}" Text="{shuxm:ResourceString Name=ViewPageSettingSetGamePathHint}"/>
                         </cwc:SettingsCard.Description>
                     </cwc:SettingsCard>
+                    <cwc:SettingsCard Header="添加已有共存虚拟盘"
+                        Description="选择已有共存库中的 game.vhdx，自动挂载并添加游戏；无需保留原游戏安装。"
+                        IsClickEnabled="True"
+                        Command="{x:Bind ((shvg:LaunchGameViewModel)DataContext).PickCoexistenceDiskCommand, Mode=OneWay}"/>
                     <cwc:SettingsCard
                         Padding="{ThemeResource SettingsExpanderItemHasIconPadding}"
                         Command="{x:Bind ((shvg:LaunchGameViewModel)DataContext).GamePackageInstallViewModel.StartCommand, Mode=OneWay}"
@@ -646,6 +650,11 @@
                                                             Description="{shuxm:ResourceString Name=GameCoexistenceScanHint}">
                                                             <StackPanel HorizontalAlignment="Stretch" Spacing="12">
                                                                 <TextBlock TextWrapping="Wrap" Text="{x:Bind ((shvg:LaunchGameViewModel)DataContext).CoexistenceSpace, Mode=OneWay}"/>
+                                                                <ToggleSwitch Header="闲时自动优化空间"
+                                                                    IsOn="{x:Bind ((shvg:LaunchGameViewModel)DataContext).LaunchOptions.CoexistenceAutoOptimize.Value, Mode=TwoWay}"/>
+                                                                <ToggleSwitch Header="允许游戏运行期间低优先级优化"
+                                                                    IsOn="{x:Bind ((shvg:LaunchGameViewModel)DataContext).LaunchOptions.CoexistenceOptimizeDuringGame.Value, Mode=TwoWay}"/>
+                                                                <TextBlock TextWrapping="Wrap" Text="胡桃运行时，每分钟检查；闲置两分钟或游戏运行时自动低优先级优化，每个库成功处理后间隔六小时。占用中的文件会跳过。"/>
                                                                 <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8">
                                                                     <Button Content="{shuxm:ResourceString Name=GameCoexistenceScanButton}"
                                                                         IsEnabled="{x:Bind ((shvg:LaunchGameViewModel)DataContext).IsCoexistenceBusy, Converter={StaticResource BoolNegationConverter}, Mode=OneWay}"

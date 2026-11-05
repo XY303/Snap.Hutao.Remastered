@@ -12,9 +12,20 @@ using System.Net.Http;
 
 namespace Snap.Hutao.Remastered.Service.Game.Coexistence;
 
+public sealed record GameLibraryImportResult(string Executable, bool OriginalDeleted, Exception? CleanupError);
+
 public sealed partial class GameServerCoexistenceService
 {
-    public async Task<string> EnableLibraryAsync(string executable, string container, IProgress<string> progress, CancellationToken token)
+    public async Task SelectLibraryAsync(string container, string selected)
+    {
+        await taskContext.SwitchToMainThreadAsync();
+        launchOptions.CoexistenceContainer.Value = container;
+        launchOptions.CoexistenceEnabled.Value = true;
+        launchOptions.PerformGamePathEntrySynchronization(selected);
+        StartAutomaticOptimization();
+    }
+
+    public async Task<GameLibraryImportResult> EnableLibraryAsync(string executable, string container, IProgress<string> progress, CancellationToken token, bool deleteOriginal = false)
     {
         await taskContext.SwitchToBackgroundAsync();
         using (AcquireExclusiveAccess())
@@ -23,18 +34,34 @@ public sealed partial class GameServerCoexistenceService
             GameInstallationInfo installation = InspectInstallation(executable);
             if (GameCoexistenceVirtualDisk.Find(executable) is not null) { throw new IOException("请先选择磁盘外的原始安装，或复用之前的版本库。"); }
             string sourceRoot = GameServerCoexistenceStorage.GetRoot(executable);
+            if (Path.GetDirectoryName(sourceRoot) is null) { throw new IOException("不能将整个磁盘根目录作为待迁移的游戏安装目录。"); }
             if (Path.GetFullPath(container).StartsWith(sourceRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) { throw new IOException("虚拟磁盘不能放入源游戏目录。"); }
             if (GameVersionLibrary.FindEntry(executable) is { Pending: true }) { throw new IOException("未完成的版本不能作为源安装。"); }
-            IReadOnlyList<string> files = GameServerCoexistenceStorage.GetSourceFiles(executable);
-            GameVirtualDiskInfo disk = await GameCoexistenceVirtualDisk.CreateAtAsync(container, files.Sum(f => new FileInfo(f).Length), token).ConfigureAwait(false);
+            GameVirtualDiskInfo disk = await GameCoexistenceVirtualDisk.CreateAtAsync(container, GameInstallationTransfer.GetRequiredBytes(executable), token).ConfigureAwait(false);
             GameVersionEntry entry = new(Guid.NewGuid(), installation.IsOversea, (int)installation.Channel.Channel, (int)installation.Channel.SubChannel, installation.InstalledVersion!.ToString(), true);
             GameVersionLibrary library = new(executable, [entry]);
             library.Save(disk);
             string target = entry.GetExecutable(disk);
-            await GameVersionLibrary.CopySnapshotAsync(executable, target, progress, token).ConfigureAwait(false);
+            await GameInstallationTransfer.CopyAsync(executable, target, progress, token).ConfigureAwait(false);
+            token.ThrowIfCancellationRequested();
+            InspectInstallation(target);
             library.Entries[0] = entry with { Pending = false };
             library.Save(disk);
-            return target;
+            if (!deleteOriginal) { return new(target, false, null); }
+            try
+            {
+                await EnsureGameStoppedAsync().ConfigureAwait(false);
+                library = library with { OriginalCleanupPending = true };
+                library.Save(disk); // Never route back to a partially cleaned source after a crash.
+                await GameInstallationTransfer.DeleteVerifiedSourceAsync(executable, target, progress, token).ConfigureAwait(false);
+                return new(target, true, null);
+            }
+            catch (Exception ex)
+            {
+                // Import is already committed. Even cancelled/partial cleanup must
+                // return the complete VHDX install so the UI can select it.
+                return new(target, false, ex);
+            }
         }
     }
 
@@ -144,25 +171,14 @@ public sealed partial class GameServerCoexistenceService
     public async Task<GameSpaceScan> ScanSpaceAsync(bool optimize, IProgress<string> progress, CancellationToken token)
     {
         await taskContext.SwitchToBackgroundAsync();
-        using (AcquireExclusiveAccess())
+        if (!await optimizationGate.WaitAsync(0, token).ConfigureAwait(false)) { throw new IOException("空间优化正在后台运行，请稍后重试，或关闭自动优化后重试。"); }
+        try
         {
-            await EnsureGameStoppedAsync().ConfigureAwait(false);
             GameVirtualDiskInfo disk = GameCoexistenceVirtualDisk.ReadDescriptor(launchOptions.CoexistenceContainer.Value) ?? throw new IOException("找不到虚拟磁盘。");
             await GameCoexistenceVirtualDisk.EnsureMountedAsync(disk, token).ConfigureAwait(false);
-            GameSpaceScan scan = await GameSpaceOptimizer.ScanAsync(disk, progress, token).ConfigureAwait(false);
-            if (optimize)
-            {
-                foreach (GameSpaceDuplicate duplicate in scan.Duplicates)
-                {
-                    progress.Report(duplicate.Target);
-                    await GameRefsBlockClone.DeduplicateAsync(duplicate.Source, duplicate.Target, duplicate.Hash, token).ConfigureAwait(false);
-                }
-
-                scan = await GameSpaceOptimizer.ScanAsync(disk, progress, token).ConfigureAwait(false);
-            }
-
-            return scan;
+            return await RunOptimizationAsync(disk, optimize, progress, token, automatic: false).ConfigureAwait(false);
         }
+        finally { optimizationGate.Release(); }
     }
 
     public async Task<string> ReopenLibraryAsync(string container, CancellationToken token)
@@ -181,7 +197,7 @@ public sealed partial class GameServerCoexistenceService
         }
     }
 
-    public async Task<string> GetOriginalForDisableAsync(CancellationToken token)
+    public async Task<string?> GetOriginalForDisableAsync(CancellationToken token)
     {
         await taskContext.SwitchToBackgroundAsync();
         using (AcquireExclusiveAccess())
@@ -189,11 +205,39 @@ public sealed partial class GameServerCoexistenceService
             token.ThrowIfCancellationRequested();
             await EnsureGameStoppedAsync().ConfigureAwait(false);
             GameVirtualDiskInfo disk = GameCoexistenceVirtualDisk.ReadDescriptor(launchOptions.CoexistenceContainer.Value) ?? throw new IOException("找不到虚拟磁盘。");
-            string original = GameVersionLibrary.Read(disk).OriginalExecutable;
-            if (!File.Exists(original)) { throw new IOException("原安装已不存在，请恢复原安装后再关闭共存，避免在版本库内进行原地转换。"); }
-            return original;
+            GameVersionLibrary library = GameVersionLibrary.Read(disk);
+            string original = library.OriginalExecutable;
+            return !library.OriginalCleanupPending && File.Exists(original) ? original : null;
         }
     }
+
+    public async Task<string> ExportSelectedInstallationAsync(string destinationFolder, IProgress<string> progress, CancellationToken token)
+    {
+        await taskContext.SwitchToBackgroundAsync();
+        using (AcquireExclusiveAccess())
+        {
+            await EnsureGameStoppedAsync().ConfigureAwait(false);
+            string selected = launchOptions.GamePathEntry.Value?.Path ?? throw new IOException("未选择共存版本。");
+            await GameCoexistenceVirtualDisk.EnsureMountedAsync(selected, token).ConfigureAwait(false);
+            GameVirtualDiskInfo disk = GameCoexistenceVirtualDisk.Find(selected) ?? throw new IOException("当前安装不在共存虚拟盘内。");
+            if (GameVersionLibrary.FindEntry(selected) is not { Pending: false }) { throw new IOException("只能恢复完整的共存版本。"); }
+            string folder = Path.GetFullPath(destinationFolder);
+            string container = Path.TrimEndingDirectorySeparator(disk.Container);
+            if (folder.Equals(container, StringComparison.OrdinalIgnoreCase) || folder.StartsWith(container + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                || GameCoexistenceVirtualDisk.Find(Path.Combine(folder, "YuanShen.exe")) is not null) { throw new IOException("恢复目录必须位于共存虚拟盘之外。"); }
+            string existing = folder;
+            while (!Directory.Exists(existing)) { existing = Path.GetDirectoryName(existing) ?? throw new IOException("恢复目标磁盘不存在。"); }
+            if (GameRefsBlockClone.GetVolume(existing).Equals(disk.VolumeName, StringComparison.OrdinalIgnoreCase)) { throw new IOException("恢复目标仍位于同一个虚拟盘内，请选择宿主磁盘上的目录。"); }
+            string target = Path.Combine(folder, Path.GetFileName(selected));
+            InspectInstallation(selected);
+            await GameInstallationTransfer.CopyAsync(selected, target, progress, token).ConfigureAwait(false);
+            InspectInstallation(target);
+            GameVersionLibrary library = GameVersionLibrary.Read(disk);
+            (library with { OriginalExecutable = target, OriginalCleanupPending = false }).Save(disk);
+            return target;
+        }
+    }
+
 
     private static bool Matches(GameVersionEntry entry, LaunchScheme scheme) => entry.IsOversea == scheme.IsOversea && entry.Channel == (int)scheme.Channel && entry.SubChannel == (int)scheme.SubChannel;
 }

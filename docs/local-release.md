@@ -68,3 +68,5 @@ ISCC.exe /DMyAppVersion=2.0.2.0 Installer/installer.iss
 该入口使用解决方案所在仓库的源码，自动执行 Release/x64 自包含发布，将生成清单及完整 `Assets`、`Resource` 目录复制到独立打包目录，然后复用已有本地证书签名。默认输出为仓库根目录的 `artifacts/installer/`，包含安装包、ZIP、公开证书和校验清单；可追加 `-OutputDirectory "D:\Relesses\MyBuild"`。普通 F5/生成不会触发打包。
 
 准备条件：本机安装项目所需 .NET 11 SDK（当前为预览版本，VS 中需允许使用预览 .NET SDK）、Windows SDK、PowerShell 7.4+、Inno Setup，并已按上节生成本地签名身份。应用版本取自 `Package.appxmanifest`；日后发布新版本时更新该文件中的 `Identity Version`。现有签名私钥只能由创建它的 Windows 用户使用。
+
+预发布版本在应用项目中使用 `VersionSuffix`（当前为 `beta`）。本地签名脚本将其附加到安装器显示版本和 EXE/ZIP 文件名，例如 `2.0.2.0-beta`；程序窗口和版本页使用程序集的信息版本显示同一后缀。清单、程序集与安装器的数字版本保持 `2.0.2.0`，满足 Windows 的版本格式要求。打包前应让项目的 `VersionPrefix`、`AssemblyVersion`、`FileVersion` 与清单数字版本保持一致。

@@ -4,6 +4,7 @@
 using Microsoft.UI.Xaml.Controls;
 using Snap.Hutao.Remastered.Core.Property;
 using Snap.Hutao.Remastered.Factory.ContentDialog;
+using Snap.Hutao.Remastered.Factory.Picker;
 using Snap.Hutao.Remastered.Service.Game;
 using Snap.Hutao.Remastered.Service.Game.FileSystem;
 using Snap.Hutao.Remastered.Service.Game.Coexistence;
@@ -66,17 +67,30 @@ public sealed partial class LaunchGameViewModel
         await RunLibraryOperationAsync(async (progress, token) =>
         {
             GameServerCoexistenceService service = serviceProvider.GetRequiredService<GameServerCoexistenceService>();
+            IContentDialogFactory dialogs = serviceProvider.GetRequiredService<IContentDialogFactory>();
             if (!enabled)
             {
-                string original = await service.GetOriginalForDisableAsync(token).ConfigureAwait(false);
+                ContentDialogResult restore = await dialogs.CreateForConfirmCancelWithSecondaryAsync("关闭共存",
+                    "是否将当前选中的共存版本恢复到普通磁盘目录？确认后选择存放位置，将完整复制并校验游戏、截图和配置。\n选择“仅关闭，不恢复”会切回仍保留的原安装；原安装不存在或清理未完成时清空当前选择。虚拟盘中的版本均保留。",
+                    "仅关闭，不恢复", ContentDialogButton.Close).ConfigureAwait(false);
+                if (restore == ContentDialogResult.None) { return; }
+                string? original;
+                if (restore == ContentDialogResult.Primary)
+                {
+                    await taskContext.SwitchToMainThreadAsync();
+                    if (!fileSystemPickerInteraction.PickFolder("选择恢复游戏的存放位置（将在其中新建目录）").TryGetValue(out string? restoreFolder)) { return; }
+                    string destination = Path.Combine(restoreFolder!, "HutaoGame-Restored-" + Guid.NewGuid().ToString("N")[..8]);
+                    original = await service.ExportSelectedInstallationAsync(destination, progress, token).ConfigureAwait(false);
+                }
+                else { original = await service.GetOriginalForDisableAsync(token).ConfigureAwait(false); }
                 await taskContext.SwitchToMainThreadAsync();
-                LaunchOptions.PerformGamePathEntrySynchronization(original);
+                if (original is null) { LaunchOptions.GamePathEntry.Value = default; }
+                else { LaunchOptions.PerformGamePathEntrySynchronization(original); }
                 LaunchOptions.CoexistenceEnabled.Value = false;
                 return;
             }
 
             string executable = LaunchOptions.GamePathEntry.Value?.Path ?? throw new IOException(SH.ViewModelLaunchGameGamePathNullOrEmpty);
-            IContentDialogFactory dialogs = serviceProvider.GetRequiredService<IContentDialogFactory>();
             if (await dialogs.CreateForConfirmCancelAsync(SH.GameCoexistenceRiskTitle, SH.GameCoexistenceRiskDescription).ConfigureAwait(false) != ContentDialogResult.Primary) { return; }
             await taskContext.SwitchToMainThreadAsync();
             if (!fileSystemPickerInteraction.PickFolder("选择虚拟硬盘存放位置（将在其中创建独立目录）").TryGetValue(out string? folder)) { return; }
@@ -85,19 +99,53 @@ public sealed partial class LaunchGameViewModel
             string container = reuse ? saved : Path.Combine(folder!, "HutaoGame-" + Guid.NewGuid().ToString("N")[..8] + ".hutao-vdisk");
             if (await dialogs.CreateForConfirmCancelAsync(SH.GameCoexistenceSecondConfirmationTitle,
                 $"源安装：{executable}\n虚拟磁盘：{container}\n{(reuse ? "将复用已有版本库" : "将完整导入当前安装")}；以后切换优先复用已有区服，仅缺少时创建独立版本。需要管理员权限及足够宿主空间。ReFS、更新器与反作弊兼容性未经保证，可能产生无法预见的错误。确认继续？").ConfigureAwait(false) != ContentDialogResult.Primary) { return; }
-            string selected = reuse
-                ? await service.ReopenLibraryAsync(container, token).ConfigureAwait(false)
-                : await service.EnableLibraryAsync(executable, container, progress, token).ConfigureAwait(false);
+            bool deleteOriginal = false;
+            if (!reuse)
+            {
+                ContentDialogResult cleanup = await dialogs.CreateForConfirmCancelWithSecondaryAsync("导入后清理原文件",
+                    $"源安装：{executable}\n是否在完整导入并通过校验后删除原游戏文件？截图和配置也会完整迁入虚拟盘。确认表示删除，选择“保留原文件”则保留两份；取消则不开始导入。清理前会再次校验，文件不一致时停止清理。",
+                    "保留原文件", ContentDialogButton.Secondary).ConfigureAwait(false);
+                if (cleanup == ContentDialogResult.None) { return; }
+                deleteOriginal = cleanup == ContentDialogResult.Primary;
+            }
+            GameLibraryImportResult imported = reuse
+                ? new(await service.ReopenLibraryAsync(container, token).ConfigureAwait(false), false, null)
+                : await service.EnableLibraryAsync(executable, container, progress, token, deleteOriginal).ConfigureAwait(false);
+            string selected = imported.Executable;
             await taskContext.SwitchToMainThreadAsync();
             LaunchOptions.CoexistenceContainer.Value = container;
             LaunchOptions.PerformGamePathEntrySynchronization(selected);
             LaunchOptions.CoexistenceEnabled.Value = true;
             CoexistenceSpace = "初次导入完成；占用和估算优化比率可通过扫描刷新。";
+            if (imported.OriginalDeleted)
+            {
+                if (LaunchOptions.GamePathEntries.Value.SingleOrDefault(e => e.Path.Equals(executable, StringComparison.OrdinalIgnoreCase)) is { } oldEntry)
+                {
+                    LaunchOptions.RemoveGamePathEntry(oldEntry);
+                }
+            }
+            if (imported.CleanupError is { } error)
+            {
+                messenger.Send(InfoBarMessage.Warning("共存导入成功，原文件清理未完成", "虚拟盘内完整版本已保留，未删除的原文件已保留。" + error.Message));
+            }
         });
     }
 
     [Command("ScanCoexistenceSpaceCommand")]
     private Task ScanCoexistenceSpaceAsync() => RunSpaceOperationAsync(false);
+
+    [Command("PickCoexistenceDiskCommand")]
+    private Task PickCoexistenceDiskAsync() => RunLibraryOperationAsync(async (_, token) =>
+    {
+        await taskContext.SwitchToMainThreadAsync();
+        (bool picked, Core.IO.ValueFile file) = fileSystemPickerInteraction.PickFile("添加已有共存虚拟盘", "胡桃共存虚拟盘", "*.vhdx");
+        if (!picked) { return; }
+        await taskContext.SwitchToBackgroundAsync();
+        GameVirtualDiskInfo disk = GameCoexistenceVirtualDisk.FromImagePath(file);
+        GameServerCoexistenceService service = serviceProvider.GetRequiredService<GameServerCoexistenceService>();
+        string selected = await service.ReopenLibraryAsync(disk.Container, token).ConfigureAwait(false);
+        await service.SelectLibraryAsync(disk.Container, selected).ConfigureAwait(false);
+    });
 
     [Command("OptimizeCoexistenceSpaceCommand")]
     private Task OptimizeCoexistenceSpaceAsync() => RunSpaceOperationAsync(true);

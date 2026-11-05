@@ -57,7 +57,7 @@ public sealed class XamlWindowController
         subclass = new(window);
         nonRude = new(window.GetWindowHandle());
 
-        window.AppWindow.Title = SH.FormatAppNameAndVersion(HutaoRuntime.Version);
+        window.AppWindow.Title = SH.FormatAppNameAndVersion(HutaoRuntime.DisplayVersion);
         window.AppWindow.SetIcon(InstalledLocation.GetAbsolutePath("Assets/Logo.ico"));
 
         // ExtendContentIntoTitleBar

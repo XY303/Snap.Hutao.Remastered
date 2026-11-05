@@ -13,6 +13,9 @@
 #ifndef MyAppVersion
   #define MyAppVersion "2.0.2.0"
 #endif
+#ifndef MyAppDisplayVersion
+  #define MyAppDisplayVersion MyAppVersion
+#endif
 #ifndef MyAppPublisher
   #define MyAppPublisher "SnapHutaoRemasteringProject"
 #endif
@@ -52,7 +55,9 @@
 [Setup]
 AppId={{E8B6E2B3-D2A0-4435-A81D-2A16AAF405C8}
 AppName={#MyAppName}
-AppVersion={#MyAppVersion}
+AppVersion={#MyAppDisplayVersion}
+VersionInfoVersion={#MyAppVersion}
+VersionInfoProductTextVersion={#MyAppDisplayVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
@@ -62,7 +67,7 @@ DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 LicenseFile=..\LICENSE
 OutputDir={#OutputDir}
-OutputBaseFilename=Snap.Hutao.Remastered-{#MyAppVersion}-Setup
+OutputBaseFilename=Snap.Hutao.Remastered-{#MyAppDisplayVersion}-Setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern

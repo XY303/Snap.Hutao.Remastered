@@ -85,6 +85,8 @@ public sealed partial class GamePackageService : IGamePackageService
             }
         }
         await StopOperationAsync().ConfigureAwait(false);
+        using IDisposable maintenancePause = await serviceProvider.GetRequiredService<GameServerCoexistenceService>()
+            .PauseOptimizationAsync(XamlApplicationLifetime.ShutdownToken).ConfigureAwait(false);
 
         CancellationTokenSource operationCtsLocal = new();
         TaskCompletionSource operationTcsLocal = new(TaskCreationOptions.RunContinuationsAsynchronously);

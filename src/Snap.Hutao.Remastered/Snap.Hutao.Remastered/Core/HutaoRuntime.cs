@@ -10,6 +10,7 @@ using Snap.Hutao.Remastered.Core.IO.Hashing;
 using Snap.Hutao.Remastered.Core.Setting;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using Windows.ApplicationModel;
@@ -20,6 +21,8 @@ namespace Snap.Hutao.Remastered.Core;
 public static class HutaoRuntime
 {
     public static Version Version { get; } = RuntimeEnvironment.IsPackaged ? Package.Current.Id.Version.ToVersion() : AppVersion.CurrentVersion;
+
+    public static string DisplayVersion { get; } = typeof(HutaoRuntime).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? Version.ToString();
 
     public static string UserAgent { get; } = $"Snap Hutao/{Version}";
 
@@ -58,7 +61,7 @@ public static class HutaoRuntime
             .ToString();
 
         Debug.Assert(XamlApplicationLifetime.CultureInfoInitialized);
-        string? displayName = SH.GetString(name, Version);
+        string? displayName = SH.GetString(name, DisplayVersion);
         return displayName is null ? null : string.Intern(displayName);
     }
 
