@@ -62,7 +62,7 @@ ISCC.exe /DMyAppVersion=2.0.2.0 Installer/installer.iss
 - 参数如下，替换 Inno Setup 和 Windows SDK 工具路径：
 
 ```text
--NoProfile -File "$(SolutionDir)..\..\scripts\BuildInstaller.ps1" -InnoSetupCompiler "C:\工具路径\Inno Setup\ISCC.exe" -SignTool "D:\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
+-NoProfile -File "$(SolutionDir)..\..\scripts\BuildInstaller.ps1" -VisualStudioOutput -InnoSetupCompiler "C:\工具路径\Inno Setup\ISCC.exe" -SignTool "D:\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
 ```
 
 该入口使用解决方案所在仓库的源码，自动执行 Release/x64 自包含发布，将生成清单及完整 `Assets`、`Resource` 目录复制到独立打包目录，然后复用已有本地证书签名。默认输出为仓库根目录的 `artifacts/installer/`，包含安装包、ZIP、公开证书和校验清单；可追加 `-OutputDirectory "D:\Relesses\MyBuild"`。普通 F5/生成不会触发打包。

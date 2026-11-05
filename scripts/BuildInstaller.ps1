@@ -5,8 +5,18 @@ param(
     [string]$InnoSetupCompiler,
     [Parameter(Mandatory)]
     [string]$SignTool,
-    [string]$OutputDirectory
+    [string]$OutputDirectory,
+    [switch]$VisualStudioOutput
 )
+
+if ($VisualStudioOutput) {
+    # Match Visual Studio External Tools' OEM decoding of redirected output.
+    $vsEncoding = [Text.Encoding]::GetEncoding([Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage)
+    [Console]::OutputEncoding = $vsEncoding
+    $OutputEncoding = $vsEncoding
+    $PSStyle.OutputRendering = 'PlainText'
+    $env:NO_COLOR = '1'
+}
 
 $ErrorActionPreference = 'Stop'
 $repository = Split-Path -Parent $PSScriptRoot
