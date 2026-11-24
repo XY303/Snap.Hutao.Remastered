@@ -3,7 +3,7 @@
 
 using Snap.Hutao.Remastered.Core.DependencyInjection.Annotation.HttpClient;
 using Snap.Hutao.Remastered.Core.IO;
-using Snap.Hutao.Remastered.ViewModel.Guide;
+using Snap.Hutao.Remastered.Web.Endpoint.Hutao;
 using Snap.Hutao.Remastered.Web.Request.Builder;
 using Snap.Hutao.Remastered.Web.Request.Builder.Abstraction;
 using System.IO;
@@ -24,13 +24,13 @@ public sealed partial class ImageCacheDownloadOperation : IImageCacheDownloadOpe
     [GeneratedConstructor]
     public partial ImageCacheDownloadOperation(IServiceProvider serviceProvider);
 
-    public async ValueTask DownloadFileAsync(Uri uri, ValueFile baseFile)
+    public async ValueTask DownloadFileAsync(Uri uri, ValueFile baseFile, CancellationToken token = default)
     {
         using (HttpClient httpClient = httpClientFactory.CreateClient(nameof(ImageCacheDownloadOperation)))
         {
             try
             {
-                await DownloadFileUsingHttpClientAsync(httpClient, uri, baseFile).ConfigureAwait(false);
+                await DownloadFileUsingHttpClientAsync(httpClient, uri, baseFile, token).ConfigureAwait(false);
             }
             catch (HttpRequestException)
             {
@@ -38,13 +38,16 @@ public sealed partial class ImageCacheDownloadOperation : IImageCacheDownloadOpe
             }
         }
 
+        // 取消后不能再把已经写了一半的文件当作下载成功，否则调用方会拿到截断的图片。
+        token.ThrowIfCancellationRequested();
+
         if (!File.Exists(baseFile))
         {
-            throw publicImageCacheException.Throw($"'{uri.OriginalString}': File not exists after download attempt.");
+            throw InternalImageCacheException.Throw($"'{uri.OriginalString}': File not exists after download attempt.");
         }
     }
 
-    private async ValueTask DownloadFileUsingHttpClientAsync(HttpClient httpClient, Uri uri, ValueFile baseFile)
+    private async ValueTask DownloadFileUsingHttpClientAsync(HttpClient httpClient, Uri uri, ValueFile baseFile, CancellationToken token)
     {
         HttpRequestMessageBuilder requestMessageBuilder = httpRequestMessageBuilderFactory
             .Create()
@@ -54,23 +57,23 @@ public sealed partial class ImageCacheDownloadOperation : IImageCacheDownloadOpe
 
         using (HttpRequestMessage requestMessage = requestMessageBuilder.HttpRequestMessage)
         {
-            using (HttpResponseMessage responseMessage = await httpClient.SendAsync(requestMessage, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false))
+            using (HttpResponseMessage responseMessage = await httpClient.SendAsync(requestMessage, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false))
             {
                 if (!responseMessage.IsSuccessStatusCode)
                 {
                     throw responseMessage.StatusCode switch
                     {
-                        HttpStatusCode.NotFound => publicImageCacheException.Throw($"Unable to download file from '{uri.OriginalString}': 404 Not Found"),
-                        _ => publicImageCacheException.Throw($"Unexpected HTTP status code {responseMessage.StatusCode}"),
+                        HttpStatusCode.NotFound => InternalImageCacheException.Throw($"Unable to download file from '{uri.OriginalString}': 404 Not Found"),
+                        _ => InternalImageCacheException.Throw($"Unexpected HTTP status code {responseMessage.StatusCode}"),
                     };
                 }
 
                 if (responseMessage.Content.Headers.ContentType?.MediaType is MediaTypeNames.Application.Json)
                 {
-                    publicImageCacheException.Throw($"Unexpected content type: {MediaTypeNames.Application.Json}");
+                    InternalImageCacheException.Throw($"Unexpected content type: {MediaTypeNames.Application.Json}");
                 }
 
-                using (Stream httpStream = await responseMessage.Content.ReadAsStreamAsync().ConfigureAwait(false))
+                using (Stream httpStream = await responseMessage.Content.ReadAsStreamAsync(token).ConfigureAwait(false))
                 {
                     string? directoryName = Path.GetDirectoryName(baseFile);
                     ArgumentException.ThrowIfNullOrEmpty(directoryName);
@@ -81,7 +84,7 @@ public sealed partial class ImageCacheDownloadOperation : IImageCacheDownloadOpe
                     }
                     catch (DirectoryNotFoundException dnfEx)
                     {
-                        throw publicImageCacheException.Throw($"Unable to create folder at '{directoryName}'", dnfEx);
+                        throw InternalImageCacheException.Throw($"Unable to create folder at '{directoryName}'", dnfEx);
                     }
 
                     FileStream fileStream;
@@ -92,27 +95,28 @@ public sealed partial class ImageCacheDownloadOperation : IImageCacheDownloadOpe
                     catch (IOException ex)
                     {
                         // The process cannot access the file '?' because it is being used by another process.
-                        throw publicImageCacheException.Throw($"Unable to create file at '{baseFile}'", ex);
+                        throw InternalImageCacheException.Throw($"Unable to create file at '{baseFile}'", ex);
                     }
 
                     try
                     {
                         using (fileStream)
                         {
-                            await httpStream.CopyToAsync(fileStream).ConfigureAwait(false);
+                            await httpStream.CopyToAsync(fileStream, token).ConfigureAwait(false);
                         }
                     }
                     catch (IOException ex)
                     {
                         // Received an unexpected EOF or 0 bytes from the transport stream.
-                        // Unable to read data from the transport connection: 远程主机强迫关闭了一个现有的连接。. SocketException: ConnectionReset
-                        // Unable to read data from the transport connection: 你的主机中的软件中止了一个已建立的连接。. SocketException: ConnectionAborted
+                        // Unable to read data from the transport connection: 杩滅▼涓绘満寮鸿揩鍏抽棴浜嗕竴涓幇鏈夌殑杩炴帴銆? SocketException: ConnectionReset
+                        // Unable to read data from the transport connection: 浣犵殑涓绘満涓殑杞欢涓浜嗕竴涓凡寤虹珛鐨勮繛鎺ャ€? SocketException: ConnectionAborted
                         // HttpIOException: The response ended prematurely. (ResponseEnded)
-                        // 磁盘空间不足。 : '?'.
-                        throw publicImageCacheException.Throw("Unable to copy stream content to file", ex);
+                        // 纾佺洏绌洪棿涓嶈冻銆?: '?'.
+                        throw InternalImageCacheException.Throw("Unable to copy stream content to file", ex);
                     }
                 }
             }
         }
     }
 }
+

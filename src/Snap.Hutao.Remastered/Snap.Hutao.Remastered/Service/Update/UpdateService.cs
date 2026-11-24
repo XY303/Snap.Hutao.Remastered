@@ -3,6 +3,7 @@
 
 using Microsoft.UI.Xaml.Controls;
 using Snap.Hutao.Remastered.Core;
+using Snap.Hutao.Remastered.Core.Diagnostics;
 using Snap.Hutao.Remastered.Core.LifeCycle;
 using Snap.Hutao.Remastered.Core.Setting;
 using Snap.Hutao.Remastered.Factory.ContentDialog;
@@ -20,7 +21,6 @@ namespace Snap.Hutao.Remastered.Service.Update;
 public sealed partial class UpdateService : IUpdateService
 {
     private const string UpdaterFilename = "Snap.Hutao.Remastered.Deployment.exe";
-    private const string StoreProductId = "9P1LDJFJFJQQ";
 
     // Avoid injecting services directly
     private readonly IServiceProvider serviceProvider;
@@ -32,6 +32,9 @@ public sealed partial class UpdateService : IUpdateService
 
     public async ValueTask<CheckUpdateResult> CheckUpdateAsync(CancellationToken token = default)
     {
+        using SentrySpanScope span = SentrySpanScope.StartOperation("update.check", "update");
+        span.SetData("update.current_version", $"{HutaoRuntime.Version}");
+
         using (IServiceScope scope = serviceProvider.CreateScope())
         {
             CheckUpdateResult checkUpdateResult = new();
@@ -62,8 +65,7 @@ public sealed partial class UpdateService : IUpdateService
                     }
                 }
 
-                // Packaged apps update through the Store and never download this installer.
-                if (RuntimeEnvironment.IsUnpackaged && checkUpdateResult.PackageInformation.Validation is not { Length: > 0 })
+                if (checkUpdateResult.PackageInformation.Validation is not { Length: > 0 })
                 {
                     checkUpdateResult.Kind = CheckUpdateResultKind.VersionApiInvalidSha256;
                 }
@@ -72,6 +74,7 @@ public sealed partial class UpdateService : IUpdateService
             }
             finally
             {
+                span.SetData("update.result", checkUpdateResult.Kind.ToString());
                 UpdateInfo = checkUpdateResult.Kind switch
                 {
                     CheckUpdateResultKind.UpdateAvailable => SH.FormatViewModelSettingUpdateAvailable(checkUpdateResult.PackageInformation?.Version.ToString()),
@@ -114,7 +117,7 @@ public sealed partial class UpdateService : IUpdateService
                 ContentDialogResult installUpdateUserConsentResult = await contentDialogFactory
                     .CreateForConfirmCancelWithSecondaryAsync(
                         SH.FormatViewTitleUpdatePackageAvailableTitle(result.PackageInformation?.Version),
-                        RuntimeEnvironment.IsPackaged ? SH.ServiceUpdateOpenStoreContent : SH.ViewTitileUpdatePackageAvailableContent,
+                        SH.ViewTitileUpdatePackageAvailableContent,
                         SH.ViewTitleUpdatePackageSkipVersionButtonText)
                     .ConfigureAwait(false);
 
@@ -126,12 +129,6 @@ public sealed partial class UpdateService : IUpdateService
 
                 if (installUpdateUserConsentResult is not ContentDialogResult.Primary)
                 {
-                    return;
-                }
-
-                if (RuntimeEnvironment.IsPackaged)
-                {
-                    await OpenStoreAsync().ConfigureAwait(false);
                     return;
                 }
 
@@ -182,31 +179,6 @@ public sealed partial class UpdateService : IUpdateService
         }
     }
 
-    public async ValueTask OpenStoreAsync()
-    {
-        using IServiceScope scope = serviceProvider.CreateScope();
-        IMessenger messenger = scope.ServiceProvider.GetRequiredService<IMessenger>();
-        try
-        {
-            ITaskContext taskContext = scope.ServiceProvider.GetRequiredService<ITaskContext>();
-            await taskContext.SwitchToMainThreadAsync();
-            bool launched = await Windows.System.Launcher.LaunchUriAsync(new Uri($"ms-windows-store://pdp/?ProductId={StoreProductId}"));
-            if (!launched)
-            {
-                launched = await Windows.System.Launcher.LaunchUriAsync(new Uri($"https://apps.microsoft.com/detail/{StoreProductId}"));
-            }
-
-            if (!launched)
-            {
-                messenger.Send(InfoBarMessage.Error(SH.ServiceUpdateOpenStoreFailed));
-            }
-        }
-        catch (Exception ex)
-        {
-            messenger.Send(InfoBarMessage.Error(SH.ServiceUpdateOpenStoreFailed, ex));
-        }
-    }
-
     private static bool IsVersionSkipped(Version? version)
     {
         return version is not null && LocalSetting.Get(SettingKeys.SkippedUpdateVersion, string.Empty) == version.ToString();
@@ -225,6 +197,7 @@ public sealed partial class UpdateService : IUpdateService
 
     private async ValueTask LaunchUpdaterAsync(DownloadSourceKind downloadSource = DownloadSourceKind.Official)
     {
+        using SentrySpanScope span = SentrySpanScope.StartChild("update.launch_updater", $"{downloadSource}");
         string updaterTargetPath = HutaoRuntime.GetDataUpdateCacheDirectoryFile(UpdaterFilename);
         InstalledLocation.CopyFileFromApplicationUri($"ms-appx:///{UpdaterFilename}", updaterTargetPath);
 

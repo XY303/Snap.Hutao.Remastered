@@ -9,6 +9,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Prepare optional bundled image snapshot
+        shell: pwsh
+        run: ./scripts/Get-BundledImages.ps1
+        env:
+          BUNDLED_IMAGES_URL: ${{ vars.BUNDLED_IMAGES_URL }}
+          BUNDLED_IMAGES_VERSION: ${{ vars.BUNDLED_IMAGES_VERSION }}
+          BUNDLED_IMAGES_SHA256: ${{ vars.BUNDLED_IMAGES_SHA256 }}
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
@@ -33,8 +41,9 @@ jobs:
       - name: Upload MSIX
         uses: actions/upload-artifact@v7
         with:
-          name: Snap.Hutao.Remastered-${{ steps.publish.outputs.version }}
+          name: Snap.Hutao.Remastered-${{ steps.publish.outputs.version }}-MSIX-${{ steps.publish.outputs.msix-signed == 'true' && 'signed' || 'unsigned-store-only' }}
           path: ${{ github.workspace }}/src/output/Snap.Hutao.Remastered-${{ steps.publish.outputs.version }}.msix
+          archive: false
 
       - name: Upload installer
         uses: actions/upload-artifact@v7
@@ -47,6 +56,30 @@ jobs:
         with:
           name: Snap.Hutao.Remastered-SnapHutaoRemasteringProject-${{ steps.publish.outputs.version }}
           path: ${{ github.workspace }}/temp-code-signing.cer
+          archive: false
+
+      - name: Install rclone
+        shell: pwsh
+        run: |
+          choco install rclone --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'rclone installation failed.' }
+
+      - name: Publish default installer and MSIX to R2
+        id: r2
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.publish.outputs.version }}
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_REGION: auto
+          RCLONE_CONFIG_R2_NO_CHECK_BUCKET: 'true'
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          $installer = Join-Path 'publish' "Snap.Hutao.Remastered-$env:RELEASE_VERSION-Setup.exe"
+          $msix = Join-Path 'src/output' "Snap.Hutao.Remastered-$env:RELEASE_VERSION.msix"
+          ./scripts/Publish-InstallerToR2.ps1 -InstallerPath $installer -MsixPath $msix
 
       - name: Add summary
         shell: pwsh
@@ -57,9 +90,10 @@ jobs:
           - **Version:** ${{ steps.publish.outputs.version }}
           - **MSIX:** Snap.Hutao.Remastered-${{ steps.publish.outputs.version }}.msix
           - **Installer:** Snap.Hutao.Remastered-${{ steps.publish.outputs.version }}-Setup.exe
-          - **Signed:** Yes
+          - **MSIX signed:** ${{ steps.publish.outputs.msix-signed }}
+          - **Installer signed:** Yes
 
           > [!IMPORTANT]
-          > 这是正式发布版本，已签名，可直接安装使用。
+          > MSIX 未签名时仅用于商店提交，不可直接旁加载。Setup 安装包已签名，可直接安装。
           "@
           echo $summary >> $Env:GITHUB_STEP_SUMMARY

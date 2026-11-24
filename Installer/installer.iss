@@ -67,7 +67,11 @@ DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 LicenseFile=..\LICENSE
 OutputDir={#OutputDir}
+#ifdef IncludeBundledImages
+OutputBaseFilename=Snap.Hutao.Remastered-{#MyAppDisplayVersion}-Setup-cache
+#else
 OutputBaseFilename=Snap.Hutao.Remastered-{#MyAppDisplayVersion}-Setup
+#endif
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -106,10 +110,19 @@ Name: "startmenuicon"; Description: "{cm:CreateStartMenuIcon}"; GroupDescription
 ; RootCertificatePath must be DER: its file SHA1 equals the X.509 thumbprint.
 Source: "{#RootCertificatePath}"; DestName: "{#RootCertificateFileName}"; Flags: dontcopy
 #endif
-Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#PublishDir}\*"; DestDir: "{app}"; Excludes: "BundledImages\*"; Flags: ignoreversion recursesubdirs createallsubdirs
+#ifdef IncludeBundledImages
+Source: "{#PublishDir}\BundledImages\*"; DestDir: "{app}\BundledImages"; Flags: ignoreversion recursesubdirs createallsubdirs
+#endif
 Source: "VC_redist.x64.exe"; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall; Check: not IsVCInstalled
 #if defined CodeSigningCertificatePath && !defined RootCertificatePath
 Source: "{#CodeSigningCertificatePath}"; DestDir: "{tmp}"; DestName: "{#CodeSigningCertificateFileName}"; Flags: ignoreversion deleteafterinstall
+#endif
+
+#ifdef IncludeBundledImages
+[InstallDelete]
+; Replace the old immutable snapshot rather than keeping removed files from a previous version.
+Type: filesandordirs; Name: "{app}\BundledImages"
 #endif
 
 [Registry]

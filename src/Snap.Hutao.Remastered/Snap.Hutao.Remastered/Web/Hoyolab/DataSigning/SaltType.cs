@@ -16,4 +16,5 @@ public enum SaltType
     OSX4,
     OSX6,
     AppLogin,
+    Passport,
 }

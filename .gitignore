@@ -454,3 +454,4 @@ $RECYCLE.BIN/
 !.vscode/launch.json
 !.vscode/extensions.json
 /cert_base64.txt
+/artifacts/

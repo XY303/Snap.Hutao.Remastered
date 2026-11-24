@@ -4,7 +4,6 @@
 // Licensed under the MIT license.
 
 using Microsoft.UI.Windowing;
-using Snap.Hutao.Remastered.Core;
 using Snap.Hutao.Remastered.Core.Property;
 using Snap.Hutao.Remastered.Core.Setting;
 using Snap.Hutao.Remastered.Model;
@@ -182,6 +181,9 @@ public sealed partial class LaunchOptions : DbStoreOptions, IRestrictedGamePathA
 
     [field: MaybeNull]
     public IObservableProperty<bool> RedirectCatherine { get => field ??= CreateProperty(SettingKeys.LaunchRedirectCatherine, false); }
+
+    [field: MaybeNull]
+    public IObservableProperty<bool> LegacyPaimonMenu { get => field ??= CreateProperty(SettingKeys.LaunchLegacyPaimonMenu, false); }
 
     [field: MaybeNull]
     public IObservableProperty<ImmutableArray<AspectRatio>> AspectRatios { get => field ??= CreatePropertyForStructUsingJson(SettingKeys.LaunchAspectRatios, ImmutableArray<AspectRatio>.Empty); }
