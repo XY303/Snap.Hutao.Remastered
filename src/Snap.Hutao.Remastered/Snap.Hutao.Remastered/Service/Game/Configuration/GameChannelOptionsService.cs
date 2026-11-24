@@ -24,8 +24,6 @@ public sealed partial class GameChannelOptionsService : IGameChannelOptionsServi
                 return ChannelOptions.GamePathNullOrEmpty();
             case GameFileSystemErrorKind.GamePathLocked:
                 return ChannelOptions.GamePathLocked(launchOptions.GamePathEntry.Value?.Path ?? string.Empty);
-            case GameFileSystemErrorKind.GamePathUnavailable:
-                return ChannelOptions.DeviceNotFound(Path.GetDirectoryName(launchOptions.GamePathEntry.Value!.Path)!);
         }
 
         ArgumentNullException.ThrowIfNull(gameFileSystem);

@@ -5,8 +5,6 @@ using Snap.Hutao.Remastered.Core.ExceptionService;
 using Snap.Hutao.Remastered.Core.Logging;
 using Snap.Hutao.Remastered.Service.Game.PathAbstraction;
 using System.Diagnostics;
-using System.ComponentModel;
-using System.IO;
 
 namespace Snap.Hutao.Remastered.Service.Game.FileSystem;
 
@@ -33,18 +31,7 @@ public static class RestrictedGamePathAccessExtension
                 return GameFileSystemErrorKind.GamePathLocked;
             }
 
-            try
-            {
-                fileSystem = GameFileSystem.Create(gamePath, releaser);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Win32Exception)
-            {
-                // Create releases the reader lease on failure. Bindings can retain
-                // their cached state; explicit async operations report mount errors.
-                fileSystem = default;
-                Trace.TraceWarning("[{0}] Game filesystem unavailable: {1}", trace, ex);
-                return GameFileSystemErrorKind.GamePathUnavailable;
-            }
+            fileSystem = GameFileSystem.Create(gamePath, releaser);
             SentrySdk.AddBreadcrumb(BreadcrumbFactory.CreateDebug($"[{trace}] Succeed", "TryGetGameFileSystem"));
             return GameFileSystemErrorKind.None;
         }

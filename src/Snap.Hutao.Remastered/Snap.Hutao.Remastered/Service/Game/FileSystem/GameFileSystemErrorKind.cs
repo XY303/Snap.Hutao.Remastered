@@ -8,5 +8,4 @@ public enum GameFileSystemErrorKind
     None,
     GamePathNullOrEmpty,
     GamePathLocked,
-    GamePathUnavailable,
 }

@@ -3,7 +3,6 @@
 
 using Snap.Hutao.Remastered.Win32;
 using System.IO;
-using Snap.Hutao.Remastered.Service.Game.Coexistence;
 
 namespace Snap.Hutao.Remastered.Core.IO;
 
@@ -17,11 +16,6 @@ public static class LogicalDrive
         }
 
         string path = directory;
-        if (GameCoexistenceVirtualDisk.Find(Path.Combine(path, "YuanShen.exe")) is not null)
-        {
-            return GameCoexistenceVirtualDisk.GetEffectiveAvailableBytes(path);
-        }
-
         if (!path.EndsWith('\\'))
         {
             path += '\\';

@@ -14,14 +14,12 @@ public readonly struct PackageConverterDeprecationContext
     public readonly IGameFileSystemView GameFileSystem;
     public readonly GameChannelSDK? GameChannelSdk;
     public readonly DeprecatedFilesWrapper? DeprecatedFiles;
-    public readonly bool PreserveSharedFiles;
 
-    public PackageConverterDeprecationContext(HttpClient httpClient, IGameFileSystemView gameFileSystem, GameChannelSDK? gameChannelSdk, DeprecatedFilesWrapper? deprecatedFiles, bool preserveSharedFiles = false)
+    public PackageConverterDeprecationContext(HttpClient httpClient, IGameFileSystemView gameFileSystem, GameChannelSDK? gameChannelSdk, DeprecatedFilesWrapper? deprecatedFiles)
     {
         HttpClient = httpClient;
         GameFileSystem = gameFileSystem;
         GameChannelSdk = gameChannelSdk;
         DeprecatedFiles = deprecatedFiles;
-        PreserveSharedFiles = preserveSharedFiles;
     }
 }

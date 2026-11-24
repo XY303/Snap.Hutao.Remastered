@@ -10,8 +10,6 @@ namespace Snap.Hutao.Remastered.Service.Game.Package.Advanced;
 
 public interface IGamePackageService
 {
-    bool IsOperationRunning { get; }
-
     ValueTask<bool> ExecuteOperationAsync(GamePackageOperationContext context);
 
     ValueTask CancelOperationAsync();

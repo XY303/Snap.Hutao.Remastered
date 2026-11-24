@@ -113,10 +113,6 @@ public static class SettingKeys
 
     // Game
     public const string LaunchAspectRatios                               = "Snap::Hutao::Game::CommandLine::AspectRatios";
-    public const string LaunchCoexistenceEnabled = "Snap::Hutao::Game::CoexistenceEnabled";
-    public const string LaunchCoexistenceContainer = "Snap::Hutao::Game::CoexistenceContainer";
-    public const string LaunchCoexistenceAutoOptimize = "Snap::Hutao::Game::CoexistenceAutoOptimize";
-    public const string LaunchCoexistenceOptimizeDuringGame = "Snap::Hutao::Game::CoexistenceOptimizeDuringGame";
     public const string LaunchAutoSelectServer                          = "Snap::Hutao::Game::AutoSelectServer";
 
     public const string LaunchUsingHoyolabAccount                        = "Snap::Hutao::Game::CommandLine::AuthTicket";
